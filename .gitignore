@@ -1,0 +1,4 @@
+vendor/
+public/uploads/
+config/db_config.php
+config/mail_config.php

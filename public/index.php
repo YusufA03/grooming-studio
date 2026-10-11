@@ -1,0 +1,1 @@
+<?php echo 'PHP ' . phpversion() . 'is running'; ?>
