@@ -109,3 +109,25 @@ a { color: #14213d; }
     padding: 12px;
     border-radius: 6px;
 }
+.booking-form input[type="password"] {
+    width: 100%;
+    max-width: 480px;
+    padding: 9px;
+    font-size: 15px;
+    font-family: inherit;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 20px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    margin-bottom: 20px;
+}
+.topbar form { margin: 0; }
+
+.site-footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }

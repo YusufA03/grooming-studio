@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../classes/Service.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 require_once __DIR__ . '/../classes/Booking.php';
+require_once __DIR__ . '/../classes/Mailer.php';
 
 // Values come from the address (first visit) or from the form (when sent).
 $input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
@@ -100,6 +101,17 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 http_response_code(409);
                 $error = 'Sorry, that time was just taken by someone else. Please choose another time.';
             } else {
+                                // Email the confirmation. If the email fails the booking is
+                // still saved, so we only log the problem.
+                try {
+                    $saved = Booking::findByToken($token);
+                    if ($saved !== null) {
+                        Mailer::sendBookingConfirmation($saved, $token);
+                    }
+                } catch (Throwable $mailEx) {
+                    error_log('Confirmation email step failed: ' . $mailEx->getMessage());
+                }
+
                 header('Location: booking_confirmed.php?token=' . $token);
                 exit;
             }

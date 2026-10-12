@@ -48,6 +48,10 @@ try {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-    </main>
+        </main>
+
+    <footer class="site-footer">
+        <a href="login.php">Staff login</a>
+    </footer>
 </body>
 </html>
