@@ -1,0 +1,169 @@
+<?php
+require_once __DIR__ . '/../config/helpers.php';
+require_once __DIR__ . '/../classes/Service.php';
+require_once __DIR__ . '/../classes/Stylist.php';
+require_once __DIR__ . '/../classes/Booking.php';
+
+// Values come from the address (first visit) or from the form (when sent).
+$input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
+
+$serviceId = filter_var($input['service_id'] ?? null, FILTER_VALIDATE_INT);
+$stylistId = filter_var($input['stylist_id'] ?? null, FILTER_VALIDATE_INT);
+$startText = (string) ($input['start'] ?? '');
+
+$service = null;
+$stylist = null;
+$start   = null;
+$error   = null;
+$errors  = [];   // problems with individual form fields
+$name = $email = $phone = $notes = '';
+
+try {
+    if ($serviceId !== false) {
+        $service = Service::find($serviceId);
+    }
+    if ($stylistId !== false) {
+        foreach (Stylist::getAll() as $s) {
+            if ((int) $s['stylist_id'] === $stylistId) {
+                $stylist = $s;
+            }
+        }
+    }
+
+    if ($service === null || $stylist === null) {
+        http_response_code(404);
+        $error = 'We could not find that service or stylist. Please start again.';
+    } else {
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $startText);
+        if ($parsed === false || $parsed->format('Y-m-d H:i') !== $startText) {
+            http_response_code(400);
+            $error = 'That appointment time is not valid. Please choose a time again.';
+        } else {
+            $start = $parsed;
+
+            // Is this time still free right now?
+            $stillFree = false;
+            $free = Booking::getAvailableSlots($stylist, (int) $service['duration_minutes'], $start);
+            foreach ($free as $slot) {
+                if ($slot == $start) {
+                    $stillFree = true;
+                    break;
+                }
+            }
+            if (!$stillFree) {
+                http_response_code(409);
+                $error = 'Sorry, that time is no longer available. Please choose another time.';
+            }
+        }
+    }
+} catch (PDOException $ex) {
+    error_log('Could not load booking details: ' . $ex->getMessage());
+    $error = 'Sorry, something went wrong on our side. Please try again later.';
+}
+
+// Where the "Back" link goes.
+$backUrl = ($service !== null) ? 'book.php?service_id=' . (int) $service['service_id'] : 'index.php';
+
+// The form was sent: check every field, then save.
+if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $name  = trim((string) ($_POST['name'] ?? ''));
+    $email = trim((string) ($_POST['email'] ?? ''));
+    $phone = trim((string) ($_POST['phone'] ?? ''));
+    $notes = trim((string) ($_POST['notes'] ?? ''));
+
+    if ($name === '' || mb_strlen($name) > 100) {
+        $errors['name'] = 'Please enter your name (up to 100 characters).';
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 150) {
+        $errors['email'] = 'Please enter a valid email address.';
+    }
+    if ($phone !== '' && !preg_match('/^[0-9+\-\s()]{7,20}$/', $phone)) {
+        $errors['phone'] = 'Phone numbers may only contain digits, spaces and + - ( ), and be 7 to 20 characters long.';
+    }
+    if (mb_strlen($notes) > 1000) {
+        $errors['notes'] = 'Notes can be up to 1000 characters.';
+    }
+
+    if (count($errors) === 0) {
+        try {
+            $token = Booking::create(
+                $stylist,
+                $service,
+                $start,
+                $name,
+                $email,
+                $phone === '' ? null : $phone,
+                $notes === '' ? null : $notes
+            );
+
+            if ($token === null) {
+                http_response_code(409);
+                $error = 'Sorry, that time was just taken by someone else. Please choose another time.';
+            } else {
+                header('Location: booking_confirmed.php?token=' . $token);
+                exit;
+            }
+        } catch (Throwable $ex) {
+            error_log('Could not save booking: ' . $ex->getMessage());
+            $error = 'Sorry, we could not save your booking. Please try again.';
+        }
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Your Details - Executive Grooming Studio</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <h1>Executive Grooming Studio</h1>
+        <p>Confirm your booking</p>
+    </header>
+
+    <main class="container">
+        <p><a href="<?= e($backUrl) ?>">&larr; Back</a></p>
+
+        <?php if ($error): ?>
+            <p class="error"><?= e($error) ?></p>
+        <?php else: ?>
+            <section class="service-card">
+                <h3>Your appointment</h3>
+                <p><strong><?= e($service['name']) ?></strong> with <?= e($stylist['name']) ?></p>
+                <p><?= e($start->format('l, j F Y')) ?> at <?= e($start->format('H:i')) ?>
+                   (<?= (int) $service['duration_minutes'] ?> min)</p>
+                <p class="meta">R<?= number_format((float) $service['price'], 2) ?></p>
+            </section>
+
+            <h2>Your details</h2>
+            <form method="post" action="book_details.php" class="booking-form">
+                <input type="hidden" name="service_id" value="<?= (int) $service['service_id'] ?>">
+                <input type="hidden" name="stylist_id" value="<?= (int) $stylist['stylist_id'] ?>">
+                <input type="hidden" name="start" value="<?= e($start->format('Y-m-d H:i')) ?>">
+
+                <label for="name">Full name</label>
+                <input type="text" name="name" id="name" maxlength="100" required value="<?= e($name) ?>">
+                <?php if (isset($errors['name'])): ?><p class="field-error"><?= e($errors['name']) ?></p><?php endif; ?>
+
+                <label for="email">Email address</label>
+                <input type="email" name="email" id="email" maxlength="150" required value="<?= e($email) ?>">
+                <?php if (isset($errors['email'])): ?><p class="field-error"><?= e($errors['email']) ?></p><?php endif; ?>
+
+                <label for="phone">Phone number (optional)</label>
+                <input type="tel" name="phone" id="phone" maxlength="20" value="<?= e($phone) ?>">
+                <?php if (isset($errors['phone'])): ?><p class="field-error"><?= e($errors['phone']) ?></p><?php endif; ?>
+
+                <label for="notes">Notes for your stylist (optional)</label>
+                <textarea name="notes" id="notes" maxlength="1000"
+                          placeholder="Allergies, the style you want, anything we should know"><?= e($notes) ?></textarea>
+                <?php if (isset($errors['notes'])): ?><p class="field-error"><?= e($errors['notes']) ?></p><?php endif; ?>
+
+                <button type="submit" class="button">Confirm booking</button>
+            </form>
+        <?php endif; ?>
+    </main>
+</body>
+</html>

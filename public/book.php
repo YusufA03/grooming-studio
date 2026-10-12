@@ -142,9 +142,15 @@ if (!$error) {
                 <?php else: ?>
                     <ul class="slot-list">
                         <?php foreach ($slots as $time => $slot): ?>
-                            <li class="slot">
-                                <strong><?= e($time) ?></strong>
-                                <small>with <?= e($slot['stylist']['name']) ?></small>
+                                                        <li class="slot">
+                                <a href="book_details.php?<?= e(http_build_query([
+                                    'service_id' => $service['service_id'],
+                                    'stylist_id' => $slot['stylist']['stylist_id'],
+                                    'start'      => $date->format('Y-m-d') . ' ' . $time,
+                                ])) ?>">
+                                    <strong><?= e($time) ?></strong>
+                                    <small>with <?= e($slot['stylist']['name']) ?></small>
+                                </a>
                             </li>
                         <?php endforeach; ?>
                     </ul>

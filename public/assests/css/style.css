@@ -84,3 +84,28 @@ a { color: #14213d; }
     padding: 12px;
     border-radius: 6px;
 }
+
+.slot a { display: block; text-decoration: none; color: #14213d; }
+.slot:hover { background: #14213d; }
+.slot:hover a,
+.slot:hover small { color: #fff; }
+
+.booking-form input[type="text"],
+.booking-form input[type="email"],
+.booking-form input[type="tel"],
+.booking-form textarea {
+    width: 100%;
+    max-width: 480px;
+    padding: 9px;
+    font-size: 15px;
+    font-family: inherit;
+}
+.booking-form textarea { min-height: 90px; }
+.field-error { color: #9b1c1c; margin: 4px 0 0; font-size: 14px; }
+
+.success {
+    background: #e7f6ec;
+    color: #14532d;
+    padding: 12px;
+    border-radius: 6px;
+}
