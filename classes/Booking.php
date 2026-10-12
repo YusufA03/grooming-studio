@@ -230,6 +230,143 @@ class Booking
         return 'You can only mark an appointment after it has started.';
     }
 
+    // Finds bookings for the administrator's dashboard, earliest first.
+    // $filters may hold any of:
+    //   from       (DateTimeImmutable)  bookings on or after this day
+    //   to         (DateTimeImmutable)  bookings on or before this day
+    //   stylist_id (int)
+    //   status     (string)             confirmed, completed, no-show or cancelled
+    //   q          (string)             text to find in the client's name or email
+    public static function search(array $filters, int $limit, int $offset): array
+    {
+        [$where, $params] = self::buildFilter($filters);
+
+        $sql = 'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
+                       s.name  AS service_name,
+                       st.name AS stylist_name,
+                       c.name  AS client_name,
+                       c.email AS client_email,
+                       c.phone AS client_phone
+                FROM Booking b
+                JOIN Service s  ON s.service_id  = b.service_id
+                JOIN Stylist st ON st.stylist_id = b.stylist_id
+                JOIN Client c   ON c.client_id   = b.client_id'
+             . $where
+             . ' ORDER BY b.start_time, b.booking_id'
+             . ' LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset;
+
+        $stmt = Database::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    // How many bookings match the same filters (used for the page numbers).
+    public static function countSearch(array $filters): int
+    {
+        [$where, $params] = self::buildFilter($filters);
+
+        $sql = 'SELECT COUNT(*)
+                FROM Booking b
+                JOIN Client c ON c.client_id = b.client_id'
+             . $where;
+
+        $stmt = Database::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return (int) $stmt->fetchColumn();
+    }
+
+    // Finds one booking, with its service, stylist and client details, by id.
+    // For the administrator only. Returns null if there is no such booking.
+    public static function findDetails(int $bookingId): ?array
+    {
+        $stmt = Database::getConnection()->prepare(
+            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
+                    s.name AS service_name, s.price,
+                    st.name AS stylist_name,
+                    c.name AS client_name, c.email AS client_email
+             FROM Booking b
+             JOIN Service s  ON s.service_id  = b.service_id
+             JOIN Stylist st ON st.stylist_id = b.stylist_id
+             JOIN Client c   ON c.client_id   = b.client_id
+             WHERE b.booking_id = :id'
+        );
+        $stmt->execute([':id' => $bookingId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
+
+    // Cancels a booking. The time becomes free again straight away, because
+    // the availability check ignores cancelled bookings.
+    // Rules: it must still be 'confirmed' and must not have started yet.
+    // Returns '' when it worked, otherwise a message explaining why not.
+    public static function cancel(int $bookingId): string
+    {
+        $db     = Database::getConnection();
+        $now    = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $update = $db->prepare(
+            "UPDATE Booking
+             SET status = 'cancelled'
+             WHERE booking_id = :id
+               AND status = 'confirmed'
+               AND start_time > :now"
+        );
+        $update->execute([':id' => $bookingId, ':now' => $now]);
+
+        if ($update->rowCount() === 1) {
+            return '';
+        }
+
+        // It did not change anything, so find out why.
+        $check = $db->prepare('SELECT status FROM Booking WHERE booking_id = :id');
+        $check->execute([':id' => $bookingId]);
+        $status = $check->fetchColumn();
+
+        if ($status === false) {
+            return 'We could not find that appointment.';
+        }
+        if ($status === 'cancelled') {
+            return 'That appointment has already been cancelled.';
+        }
+        if ($status !== 'confirmed') {
+            return 'That appointment is already marked as ' . $status . ', so it cannot be cancelled.';
+        }
+        return 'Only upcoming appointments can be cancelled. Use Completed or No-show for one that has started.';
+    }
+
+    // Turns the dashboard's filters into the WHERE part of a query,
+    // always using placeholders so typed text can never change the query.
+    private static function buildFilter(array $filters): array
+    {
+        $where  = [];
+        $params = [];
+
+        if (!empty($filters['from'])) {
+            $where[] = 'b.start_time >= :from_time';
+            $params[':from_time'] = $filters['from']->format('Y-m-d') . ' 00:00:00';
+        }
+        if (!empty($filters['to'])) {
+            $where[] = 'b.start_time < :to_time';
+            $params[':to_time'] = $filters['to']->modify('+1 day')->format('Y-m-d') . ' 00:00:00';
+        }
+        if (!empty($filters['stylist_id'])) {
+            $where[] = 'b.stylist_id = :stylist_id';
+            $params[':stylist_id'] = (int) $filters['stylist_id'];
+        }
+        if (!empty($filters['status'])) {
+            $where[] = 'b.status = :status';
+            $params[':status'] = $filters['status'];
+        }
+        if (isset($filters['q']) && $filters['q'] !== '') {
+            // % and _ are wildcards in LIKE, so make them ordinary characters.
+            $like = '%' . addcslashes($filters['q'], '\\%_') . '%';
+            $where[] = '(c.name LIKE :q_name OR c.email LIKE :q_email)';
+            $params[':q_name']  = $like;
+            $params[':q_email'] = $like;
+        }
+
+        return [count($where) ? ' WHERE ' . implode(' AND ', $where) : '', $params];
+    }
+
     // Two appointments overlap when each one starts before the other ends.
     private static function overlapsAny(DateTimeImmutable $start, DateTimeImmutable $end, array $booked): bool
     {

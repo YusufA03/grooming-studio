@@ -2,50 +2,90 @@
 use PHPMailer\PHPMailer\PHPMailer;
 
 // Sends the emails the system needs to send.
+// Every method returns true if the email was handed to the mail server and
+// false if not. None of them ever crashes the page: a failed email must not
+// undo a saved booking or a cancellation.
 class Mailer
 {
     // Emails a booking confirmation to the client.
-    // Returns true if the email was handed to the mail server, false if not.
-    // It never crashes the page: a failed email must not undo a saved booking.
     public static function sendBookingConfirmation(array $booking, string $token): bool
     {
-        $autoloadFile = __DIR__ . '/../vendor/autoload.php';
-        $configFile   = __DIR__ . '/../config/mail_config.php';
-
-        if (!is_file($autoloadFile) || !is_file($configFile)) {
-            error_log('Confirmation email not sent: PHPMailer (vendor/) or config/mail_config.php is missing.');
+        $config = self::loadConfig();
+        if ($config === null) {
             return false;
         }
-        require_once $autoloadFile;
-        $config = require $configFile;
 
+        $link = rtrim($config['site_url'], '/') . '/booking_confirmed.php?token=' . $token;
+
+        $rows = self::detailRows($booking);
+        if (!empty($booking['notes'])) {
+            $rows['Your notes'] = $booking['notes'];
+        }
+
+        [$html, $text] = self::buildMessage(
+            'Your booking is confirmed',
+            $booking['client_name'],
+            'Thank you for booking with Executive Grooming Studio. Here are your details:',
+            $rows,
+            'View your booking',
+            $link
+        );
+
+        return self::send($config, $booking['client_email'], $booking['client_name'],
+            'Your booking is confirmed - Executive Grooming Studio', $html, $text);
+    }
+
+    // Emails the client to say the salon has cancelled their appointment.
+    public static function sendBookingCancellation(array $booking): bool
+    {
+        $config = self::loadConfig();
+        if ($config === null) {
+            return false;
+        }
+
+        $link = rtrim($config['site_url'], '/') . '/index.php';
+
+        [$html, $text] = self::buildMessage(
+            'Your appointment has been cancelled',
+            $booking['client_name'],
+            'We are sorry, but your appointment with Executive Grooming Studio has been cancelled. These were the details:',
+            self::detailRows($booking),
+            'Book a new appointment',
+            $link
+        );
+
+        return self::send($config, $booking['client_email'], $booking['client_name'],
+            'Your appointment has been cancelled - Executive Grooming Studio', $html, $text);
+    }
+
+    // The lines of booking details shown in an email.
+    private static function detailRows(array $booking): array
+    {
         $start = new DateTimeImmutable($booking['start_time']);
         $end   = new DateTimeImmutable($booking['end_time']);
-        $link  = rtrim($config['site_url'], '/') . '/booking_confirmed.php?token=' . $token;
-        $price = number_format((float) $booking['price'], 2);
 
-        // Makes text safe to put inside the HTML email.
-        $h = function (string $text): string {
-            return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
-        };
-
-        $rows = [
+        return [
             'Reference' => '#' . (int) $booking['booking_id'],
             'Service'   => $booking['service_name'],
             'Stylist'   => $booking['stylist_name'],
             'Date'      => $start->format('l, j F Y'),
             'Time'      => $start->format('H:i') . ' to ' . $end->format('H:i'),
-            'Price'     => 'R' . $price . ' (paid in the salon)',
+            'Price'     => 'R' . number_format((float) $booking['price'], 2) . ' (paid in the salon)',
         ];
-        if (!empty($booking['notes'])) {
-            $rows['Your notes'] = $booking['notes'];
-        }
+    }
 
-        // The HTML version of the email.
+    // Builds the HTML and plain-text versions of a simple email.
+    // Returns [html, text]. Everything is made safe before it goes into the HTML.
+    private static function buildMessage(string $heading, string $clientName, string $intro, array $rows, string $linkText, string $link): array
+    {
+        $h = function (string $text): string {
+            return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+        };
+
         $html  = '<div style="font-family: Arial, Helvetica, sans-serif; max-width: 520px; color: #222;">';
-        $html .= '<h2 style="color: #14213d;">Your booking is confirmed</h2>';
-        $html .= '<p>Hi ' . $h($booking['client_name']) . ',</p>';
-        $html .= '<p>Thank you for booking with Executive Grooming Studio. Here are your details:</p>';
+        $html .= '<h2 style="color: #14213d;">' . $h($heading) . '</h2>';
+        $html .= '<p>Hi ' . $h($clientName) . ',</p>';
+        $html .= '<p>' . $h($intro) . '</p>';
         $html .= '<table style="border-collapse: collapse; width: 100%;">';
         foreach ($rows as $label => $value) {
             $html .= '<tr>'
@@ -54,19 +94,39 @@ class Mailer
                    . '</tr>';
         }
         $html .= '</table>';
-        $html .= '<p><a href="' . $h($link) . '" style="color: #14213d;">View your booking</a></p>';
+        $html .= '<p><a href="' . $h($link) . '" style="color: #14213d;">' . $h($linkText) . '</a></p>';
         $html .= '<p style="color: #666;">Executive Grooming Studio</p>';
         $html .= '</div>';
 
-        // The plain-text version (for email programs that do not show HTML).
-        $text  = "Your booking is confirmed\n\n";
-        $text .= 'Hi ' . $booking['client_name'] . ",\n\n";
-        $text .= "Thank you for booking with Executive Grooming Studio. Here are your details:\n\n";
+        $text  = $heading . "\n\n";
+        $text .= 'Hi ' . $clientName . ",\n\n" . $intro . "\n\n";
         foreach ($rows as $label => $value) {
             $text .= $label . ': ' . $value . "\n";
         }
-        $text .= "\nView your booking: " . $link . "\n\nExecutive Grooming Studio\n";
+        $text .= "\n" . $linkText . ': ' . $link . "\n\nExecutive Grooming Studio\n";
 
+        return [$html, $text];
+    }
+
+    // Loads PHPMailer and the email settings. Returns the settings, or null
+    // (after logging why) if either is missing.
+    private static function loadConfig(): ?array
+    {
+        $autoloadFile = __DIR__ . '/../vendor/autoload.php';
+        $configFile   = __DIR__ . '/../config/mail_config.php';
+
+        if (!is_file($autoloadFile) || !is_file($configFile)) {
+            error_log('Email not sent: PHPMailer (vendor/) or config/mail_config.php is missing.');
+            return null;
+        }
+        require_once $autoloadFile;
+
+        return require $configFile;
+    }
+
+    // Hands one email to the mail server.
+    private static function send(array $config, string $toEmail, string $toName, string $subject, string $html, string $text): bool
+    {
         try {
             $mail = new PHPMailer(true); // true = report problems as exceptions
             $mail->isSMTP();
@@ -76,7 +136,7 @@ class Mailer
 
             // PHPMailer also waits up to 300 seconds for each reply from the
             // mail server. Shorten that too, so a silent server cannot freeze
-            // the booking page.
+            // the page.
             $mail->getSMTPInstance()->Timelimit = 10;
             $mail->CharSet = 'UTF-8';
 
@@ -98,16 +158,16 @@ class Mailer
             }
 
             $mail->setFrom($config['from_email'], $config['from_name']);
-            $mail->addAddress($booking['client_email'], $booking['client_name']);
+            $mail->addAddress($toEmail, $toName);
             $mail->isHTML(true);
-            $mail->Subject = 'Your booking is confirmed - Executive Grooming Studio';
+            $mail->Subject = $subject;
             $mail->Body    = $html;
             $mail->AltBody = $text;
             $mail->send();
 
             return true;
         } catch (Throwable $ex) {
-            error_log('Could not send confirmation email: ' . $ex->getMessage());
+            error_log('Could not send email: ' . $ex->getMessage());
             return false;
         }
     }
