@@ -1,11 +1,6 @@
 <?php
+require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../classes/Service.php';
-
-// Makes text safe to show on a web page (stops injected HTML/scripts).
-function e(string $text): string
-{
-    return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
-}
 
 $services = [];
 $error    = null;
@@ -48,6 +43,7 @@ try {
                             <?= (int) $service['duration_minutes'] ?> min
                             &middot; R<?= number_format((float) $service['price'], 2) ?>
                         </p>
+                        <a class="button" href="book.php?service_id=<?= (int) $service['service_id'] ?>">Book this service</a>
                     </article>
                 <?php endforeach; ?>
             </div>

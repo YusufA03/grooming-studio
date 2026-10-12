@@ -15,4 +15,18 @@ class Service
         );
         return $stmt->fetchAll();
     }
+
+    // Returns one service by its id, or null if it does not exist.
+    public static function find(int $serviceId): ?array
+    {
+        $db   = Database::getConnection();
+        $stmt = $db->prepare(
+            'SELECT service_id, name, description, duration_minutes, price
+             FROM Service
+             WHERE service_id = :id'
+        );
+        $stmt->execute([':id' => $serviceId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
 }

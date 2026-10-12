@@ -17,6 +17,7 @@ body {
 .site-header p  { margin: 0; color: #c9a227; }
 
 .container { max-width: 1000px; margin: 0 auto; padding: 30px 20px; }
+a { color: #14213d; }
 
 .service-grid {
     display: grid;
@@ -31,6 +32,51 @@ body {
 }
 .service-card h3 { margin-top: 0; color: #14213d; }
 .service-card .meta { font-weight: bold; color: #14213d; }
+
+.button {
+    display: inline-block;
+    background: #14213d;
+    color: #fff;
+    text-decoration: none;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 15px;
+    cursor: pointer;
+}
+.button:hover { background: #c9a227; color: #14213d; }
+
+.booking-form {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.booking-form label { display: block; margin: 12px 0 4px; font-weight: bold; }
+.booking-form select,
+.booking-form input[type="date"] {
+    width: 100%;
+    max-width: 360px;
+    padding: 9px;
+    font-size: 15px;
+}
+.booking-form .button { margin-top: 16px; }
+
+.slot-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+.slot {
+    background: #fff;
+    border: 2px solid #14213d;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+}
+.slot small { display: block; color: #555; }
 
 .error {
     background: #fde8e8;
