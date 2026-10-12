@@ -131,3 +131,8 @@ a { color: #14213d; }
 .topbar form { margin: 0; }
 
 .site-footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+.schedule-table { width: 100%; border-collapse: collapse; background: #fff; margin-bottom: 20px; }
+.schedule-table th, .schedule-table td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; vertical-align: top; }
+.schedule-table th { background: #14213d; color: #fff; }
+.inline-form { display: inline-block; margin: 0 4px 4px 0; }
+.schedule-nav a[aria-current="page"] { font-weight: bold; }

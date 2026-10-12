@@ -158,6 +158,78 @@ class Booking
         return $row === false ? null : $row;
     }
 
+    // Returns one stylist's bookings that START from $from up to (but not
+    // including) $to, earliest first. Used for the stylist's schedule.
+    public static function getForStylist(int $stylistId, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $db   = Database::getConnection();
+        $stmt = $db->prepare(
+            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
+                    s.name AS service_name,
+                    c.name AS client_name
+             FROM Booking b
+             JOIN Service s ON s.service_id = b.service_id
+             JOIN Client c  ON c.client_id  = b.client_id
+             WHERE b.stylist_id = :stylist_id
+               AND b.start_time >= :from_time
+               AND b.start_time <  :to_time
+             ORDER BY b.start_time, b.booking_id'
+        );
+        $stmt->execute([
+            ':stylist_id' => $stylistId,
+            ':from_time'  => $from->format('Y-m-d H:i:s'),
+            ':to_time'    => $to->format('Y-m-d H:i:s'),
+        ]);
+        return $stmt->fetchAll();
+    }
+
+    // A stylist records how an appointment ended: 'completed' or 'no-show'.
+    // Rules:
+    //  - it must be THIS stylist's own appointment
+    //  - it must still be 'confirmed' (completed / no-show are final)
+    //  - it must have already started
+    // Returns '' when it worked, otherwise a message explaining why not.
+    public static function recordOutcome(int $bookingId, int $stylistId, string $outcome): string
+    {
+        if (!in_array($outcome, ['completed', 'no-show'], true)) {
+            return 'That is not a valid choice.';
+        }
+
+        $db     = Database::getConnection();
+        $now    = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $update = $db->prepare(
+            "UPDATE Booking
+             SET status = :outcome
+             WHERE booking_id = :id
+               AND stylist_id = :stylist_id
+               AND status = 'confirmed'
+               AND start_time <= :now"
+        );
+        $update->execute([
+            ':outcome'    => $outcome,
+            ':id'         => $bookingId,
+            ':stylist_id' => $stylistId,
+            ':now'        => $now,
+        ]);
+
+        if ($update->rowCount() === 1) {
+            return '';
+        }
+
+        // It did not change anything, so find out why (still only this stylist's own booking).
+        $check = $db->prepare('SELECT status FROM Booking WHERE booking_id = :id AND stylist_id = :stylist_id');
+        $check->execute([':id' => $bookingId, ':stylist_id' => $stylistId]);
+        $status = $check->fetchColumn();
+
+        if ($status === false) {
+            return 'We could not find that appointment.';
+        }
+        if ($status !== 'confirmed') {
+            return 'That appointment has already been marked as ' . $status . '.';
+        }
+        return 'You can only mark an appointment after it has started.';
+    }
+
     // Two appointments overlap when each one starts before the other ends.
     private static function overlapsAny(DateTimeImmutable $start, DateTimeImmutable $end, array $booked): bool
     {
