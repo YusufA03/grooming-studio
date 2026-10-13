@@ -3,9 +3,10 @@
 function adminNav(string $current): string
 {
     $links = [
-        'bookings' => ['admin_dashboard.php', 'Bookings'],
-        'services' => ['admin_services.php',  'Services'],
-        'stylists' => ['admin_stylists.php',  'Stylists'],
+        'bookings'   => ['admin_dashboard.php',     'Bookings'],
+        'addbooking' => ['stylist_add_booking.php', 'Add booking'],
+        'services'   => ['admin_services.php',      'Services'],
+        'stylists'   => ['admin_stylists.php',      'Stylists'],
     ];
 
     $parts = [];

@@ -17,10 +17,11 @@ DROP TABLE IF EXISTS Service;
 DROP TABLE IF EXISTS Administrator;
 SET FOREIGN_KEY_CHECKS = 1;
 
+-- email is optional: a client who phones the salon may not have one.
 CREATE TABLE Client (
     client_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    email VARCHAR(150) NOT NULL,
+    email VARCHAR(150) NULL,
     phone VARCHAR(20)
 );
 
@@ -40,7 +41,8 @@ CREATE TABLE Service (
     name VARCHAR(100) NOT NULL,
     description TEXT,
     duration_minutes INT NOT NULL CHECK (duration_minutes > 0),
-    price DECIMAL(8,2) NOT NULL CHECK (price > 0)
+    price DECIMAL(8,2) NOT NULL CHECK (price > 0),
+    image VARCHAR(255) NULL   -- file name of the service's picture (kept in public/uploads/services)
 );
 
 CREATE TABLE Administrator (

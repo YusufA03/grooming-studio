@@ -79,7 +79,7 @@ class Booking
         array $service,
         DateTimeImmutable $start,
         string $clientName,
-        string $clientEmail,
+        ?string $clientEmail,
         ?string $clientPhone,
         ?string $notes
     ): ?string {

@@ -14,6 +14,10 @@ class Mailer
     // it is the "updated confirmation" sent after the client moves the booking.
     public static function sendBookingConfirmation(array $booking, string $token, bool $rescheduled = false): bool
     {
+        if (empty($booking['client_email'])) {
+            return false; // this client has no email address
+        }
+
         $config = self::loadConfig();
         if ($config === null) {
             return false;
@@ -49,6 +53,10 @@ class Mailer
     // is true when the client cancelled it themselves, false when the salon did.
     public static function sendBookingCancellation(array $booking, bool $byClient = false): bool
     {
+        if (empty($booking['client_email'])) {
+            return false; // this client has no email address
+        }
+
         $config = self::loadConfig();
         if ($config === null) {
             return false;
@@ -74,6 +82,10 @@ class Mailer
     // Emails the client a reminder that their appointment is coming up.
     public static function sendBookingReminder(array $booking, string $token): bool
     {
+        if (empty($booking['client_email'])) {
+            return false; // this client has no email address
+        }
+
         $config = self::loadConfig();
         if ($config === null) {
             return false;

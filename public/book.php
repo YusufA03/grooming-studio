@@ -102,6 +102,10 @@ if (!$error) {
             <p class="error"><?= e($error) ?></p>
         <?php else: ?>
             <section class="service-card">
+                <?php $picture = Service::imageUrl($service['image']); ?>
+                <?php if ($picture): ?>
+                    <img class="service-image" src="<?= e($picture) ?>" alt="<?= e($service['name']) ?>" loading="lazy">
+                <?php endif; ?>
                 <h3><?= e($service['name']) ?></h3>
                 <p><?= e($service['description'] ?? '') ?></p>
                 <p class="meta">
@@ -142,7 +146,7 @@ if (!$error) {
                 <?php else: ?>
                     <ul class="slot-list">
                         <?php foreach ($slots as $time => $slot): ?>
-                                                        <li class="slot">
+                            <li class="slot">
                                 <a href="book_details.php?<?= e(http_build_query([
                                     'service_id' => $service['service_id'],
                                     'stylist_id' => $slot['stylist']['stylist_id'],

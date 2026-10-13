@@ -1,15 +1,30 @@
 <?php
 require_once __DIR__ . '/Database.php';
+require_once __DIR__ . '/ImageUpload.php';
 
 // Represents the services the salon offers (cut, colour, treatment...).
 class Service
 {
+    // The only shape of picture file name we ever save or show.
+    public const IMAGE_NAME_PATTERN = '/^[a-f0-9]{32}\.(jpg|png|webp)\z/';
+
+    // The address of a service's picture (relative to the public folder), or
+    // null if it has none. Anything that does not look exactly like a file
+    // name we created is ignored, so a bad value can never point elsewhere.
+    public static function imageUrl(?string $image): ?string
+    {
+        if ($image === null || !preg_match(self::IMAGE_NAME_PATTERN, $image)) {
+            return null;
+        }
+        return 'uploads/services/' . $image;
+    }
+
     // Returns every service as an array, sorted by name.
     public static function getAll(): array
     {
         $db   = Database::getConnection();
         $stmt = $db->query(
-            'SELECT service_id, name, description, duration_minutes, price
+            'SELECT service_id, name, description, duration_minutes, price, image
              FROM Service
              ORDER BY name'
         );
@@ -21,7 +36,7 @@ class Service
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            'SELECT service_id, name, description, duration_minutes, price
+            'SELECT service_id, name, description, duration_minutes, price, image
              FROM Service
              WHERE service_id = :id'
         );
@@ -34,7 +49,7 @@ class Service
     public static function getAllWithUsage(): array
     {
         $stmt = Database::getConnection()->query(
-            'SELECT s.service_id, s.name, s.description, s.duration_minutes, s.price,
+            'SELECT s.service_id, s.name, s.description, s.duration_minutes, s.price, s.image,
                     (SELECT COUNT(*) FROM Booking b WHERE b.service_id = s.service_id) AS bookings
              FROM Service s
              ORDER BY s.name'
@@ -92,13 +107,14 @@ class Service
     {
         $db = Database::getConnection();
         $db->prepare(
-            'INSERT INTO Service (name, description, duration_minutes, price)
-             VALUES (:name, :description, :duration, :price)'
+            'INSERT INTO Service (name, description, duration_minutes, price, image)
+             VALUES (:name, :description, :duration, :price, :image)'
         )->execute([
             ':name'        => $clean['name'],
             ':description' => $clean['description'],
             ':duration'    => $clean['duration_minutes'],
             ':price'       => $clean['price'],
+            ':image'       => $clean['image'] ?? null,
         ]);
         return (int) $db->lastInsertId();
     }
@@ -120,6 +136,14 @@ class Service
         ]);
     }
 
+    // Sets (or clears, with null) a service's picture.
+    public static function setImage(int $serviceId, ?string $filename): void
+    {
+        Database::getConnection()
+            ->prepare('UPDATE Service SET image = :image WHERE service_id = :id')
+            ->execute([':image' => $filename, ':id' => $serviceId]);
+    }
+
     // Deletes a service that has never been booked. A service that appears in
     // any booking (even an old one) cannot be deleted, because the booking
     // history would lose its meaning.
@@ -138,7 +162,9 @@ class Service
             return 'That service appears in existing bookings, so it cannot be deleted. You can edit it instead.';
         }
 
+        $existing = self::find($serviceId);
         $db->prepare('DELETE FROM Service WHERE service_id = :id')->execute([':id' => $serviceId]);
+        ImageUpload::delete($existing['image'] ?? null); // tidy up the picture file too
         return '';
     }
 

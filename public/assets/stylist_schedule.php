@@ -123,6 +123,8 @@ $now = new DateTimeImmutable('now');
             <p class="error"><?= e($dateProblem) ?></p>
         <?php endif; ?>
 
+        <p><a class="button" href="stylist_add_booking.php">+ Add a booking</a></p>
+
         <p class="schedule-nav">
             <a href="<?= e(scheduleUrl('day', $date)) ?>"<?= $view === 'day' ? ' aria-current="page"' : '' ?>>Day view</a> |
             <a href="<?= e(scheduleUrl('week', $date)) ?>"<?= $view === 'week' ? ' aria-current="page"' : '' ?>>Week view</a>

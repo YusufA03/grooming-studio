@@ -37,6 +37,10 @@ try {
             <div class="service-grid">
                 <?php foreach ($services as $service): ?>
                     <article class="service-card">
+                        <?php $picture = Service::imageUrl($service['image']); ?>
+                        <?php if ($picture): ?>
+                            <img class="service-image" src="<?= e($picture) ?>" alt="<?= e($service['name']) ?>" loading="lazy">
+                        <?php endif; ?>
                         <h3><?= e($service['name']) ?></h3>
                         <p><?= e($service['description'] ?? '') ?></p>
                         <p class="meta">
@@ -48,7 +52,7 @@ try {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        </main>
+    </main>
 
     <footer class="site-footer">
         <a href="login.php">Staff login</a>

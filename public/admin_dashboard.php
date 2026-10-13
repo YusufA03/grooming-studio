@@ -110,16 +110,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // Tell the client. If the email fails the cancellation still stands.
                     $emailed = false;
+                    $noEmail = false;
                     try {
                         $details = Booking::findDetails($bookingId);
-                        if ($details !== null) {
+                        if ($details !== null && empty($details['client_email'])) {
+                            $noEmail = true;
+                        } elseif ($details !== null) {
                             $emailed = Mailer::sendBookingCancellation($details);
                         }
                     } catch (Throwable $mailEx) {
                         error_log('Cancellation email step failed: ' . $mailEx->getMessage());
                     }
                     $_SESSION['flash'] = ['success', 'The appointment was cancelled. '
-                        . ($emailed ? 'The client has been emailed.' : 'The client could NOT be emailed, so please tell them yourself.')];
+                        . ($noEmail ? 'This client has no email address, so please tell them yourself.'
+                            : ($emailed ? 'The client has been emailed.' : 'The client could NOT be emailed, so please tell them yourself.'))];
                 }
             } catch (PDOException $ex) {
                 error_log('Could not cancel booking: ' . $ex->getMessage());
@@ -250,7 +254,7 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                             <td><?= e($start->format('D j M Y')) ?><br><?= e($start->format('H:i')) ?> - <?= e($end->format('H:i')) ?></td>
                             <td>
                                 <?= e($b['client_name']) ?><br>
-                                <?= e($b['client_email']) ?>
+                                <?= ($b['client_email'] !== null && $b['client_email'] !== '') ? e($b['client_email']) : '(no email)' ?>
                                 <?php if ($b['client_phone']): ?><br><?= e($b['client_phone']) ?><?php endif; ?>
                             </td>
                             <td><?= e($b['stylist_name']) ?></td>

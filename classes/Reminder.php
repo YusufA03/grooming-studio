@@ -33,13 +33,15 @@ class Reminder
         $horizon = $now->modify('+' . self::LEAD_MINUTES . ' minutes');
 
         $find = $db->prepare(
-            "SELECT booking_id, manage_token
-             FROM Booking
-             WHERE status = 'confirmed'
-               AND reminder_sent = FALSE
-               AND start_time > :now
-               AND start_time <= :horizon
-             ORDER BY start_time, booking_id
+            "SELECT b.booking_id, b.manage_token
+             FROM Booking b
+             JOIN Client c ON c.client_id = b.client_id
+             WHERE b.status = 'confirmed'
+               AND b.reminder_sent = FALSE
+               AND c.email IS NOT NULL
+               AND b.start_time > :now
+               AND b.start_time <= :horizon
+             ORDER BY b.start_time, b.booking_id
              LIMIT " . self::MAX_PER_RUN
         );
         $find->execute([

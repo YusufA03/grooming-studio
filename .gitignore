@@ -2,3 +2,4 @@ vendor/
 public/uploads/
 config/db_config.php
 config/mail_config.php
+config/cron_config.php

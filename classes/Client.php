@@ -6,9 +6,17 @@ class Client
 {
     // Finds a client by email and updates their name and phone to the latest
     // details given, or creates a new client. Returns the client's id.
-    public static function findOrCreate(string $name, string $email, ?string $phone): int
+    // A client with no email address (for example someone who phoned the
+    // salon) cannot be recognised again, so each one is saved as a new client.
+    public static function findOrCreate(string $name, ?string $email, ?string $phone): int
     {
         $db = Database::getConnection();
+
+        if ($email === null) {
+            $db->prepare('INSERT INTO Client (name, email, phone) VALUES (:name, NULL, :phone)')
+               ->execute([':name' => $name, ':phone' => $phone]);
+            return (int) $db->lastInsertId();
+        }
 
         $find = $db->prepare('SELECT client_id FROM Client WHERE email = :email ORDER BY client_id LIMIT 1');
         $find->execute([':email' => $email]);
