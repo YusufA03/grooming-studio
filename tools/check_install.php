@@ -67,7 +67,7 @@ $files = [
     'public/booking_confirmed.php'    => 'cancel_booking.php',
     'public/cancel_booking.php'       => 'cancelByToken',
     'public/cron_reminders.php'       => 'is_string',
-    'public/index.php'                => 'service-image',
+    'public/index.php'                => 'hero-title',
     'public/login.php'                => 'csrfValid',
     'public/logout.php'               => 'csrfValid',
     'public/reschedule.php'           => 'getAvailableSlots',
@@ -103,7 +103,7 @@ if ($cssFile === null) {
 } else {
     $css = (string) file_get_contents($cssFile);
     $missingCss = [];
-    foreach (['.schedule-table' => 'schedule/table styles', '.filter-form' => 'admin filter styles', '.slot form' => 'reschedule styles', '.service-image' => 'picture styles', '.service-thumb' => 'picture thumbnail styles', '.admin-nav' => 'admin menu styles'] as $needle => $what) {
+    foreach (['.schedule-table' => 'schedule/table styles', '.filter-form' => 'admin filter styles', '.slot form' => 'reschedule styles', '.service-image' => 'picture styles', '.service-thumb' => 'picture thumbnail styles', '.admin-nav' => 'admin menu styles', '.hero-title' => 'the new design (home page hero)'] as $needle => $what) {
         if (strpos($css, $needle) === false) { $missingCss[] = $what; }
     }
     $name = 'public/assets/css/' . basename($cssFile) . ($cssFile === $cssOff ? '  (switched OFF: renamed .off)' : '');
