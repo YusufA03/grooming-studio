@@ -1,4 +1,7 @@
 <?php
+// Keep the same clock as the rest of the system.
+require_once __DIR__ . '/../config/timezone.php';
+
 use PHPMailer\PHPMailer\PHPMailer;
 
 // Sends the emails the system needs to send.
@@ -7,8 +10,9 @@ use PHPMailer\PHPMailer\PHPMailer;
 // undo a saved booking or a cancellation.
 class Mailer
 {
-    // Emails a booking confirmation to the client.
-    public static function sendBookingConfirmation(array $booking, string $token): bool
+    // Emails a booking confirmation to the client. When $rescheduled is true
+    // it is the "updated confirmation" sent after the client moves the booking.
+    public static function sendBookingConfirmation(array $booking, string $token, bool $rescheduled = false): bool
     {
         $config = self::loadConfig();
         if ($config === null) {
@@ -22,21 +26,27 @@ class Mailer
             $rows['Your notes'] = $booking['notes'];
         }
 
+        $heading = $rescheduled ? 'Your booking has been rescheduled' : 'Your booking is confirmed';
+        $intro   = $rescheduled
+            ? 'Your appointment with Executive Grooming Studio has been moved. Here are your new details:'
+            : 'Thank you for booking with Executive Grooming Studio. Here are your details:';
+
         [$html, $text] = self::buildMessage(
-            'Your booking is confirmed',
+            $heading,
             $booking['client_name'],
-            'Thank you for booking with Executive Grooming Studio. Here are your details:',
+            $intro,
             $rows,
-            'View your booking',
+            'View or change your booking',
             $link
         );
 
         return self::send($config, $booking['client_email'], $booking['client_name'],
-            'Your booking is confirmed - Executive Grooming Studio', $html, $text);
+            $heading . ' - Executive Grooming Studio', $html, $text);
     }
 
-    // Emails the client to say the salon has cancelled their appointment.
-    public static function sendBookingCancellation(array $booking): bool
+    // Emails the client to say an appointment has been cancelled. $byClient
+    // is true when the client cancelled it themselves, false when the salon did.
+    public static function sendBookingCancellation(array $booking, bool $byClient = false): bool
     {
         $config = self::loadConfig();
         if ($config === null) {
@@ -48,7 +58,9 @@ class Mailer
         [$html, $text] = self::buildMessage(
             'Your appointment has been cancelled',
             $booking['client_name'],
-            'We are sorry, but your appointment with Executive Grooming Studio has been cancelled. These were the details:',
+            $byClient
+                ? 'As you asked, your appointment with Executive Grooming Studio has been cancelled. These were the details:'
+                : 'We are sorry, but your appointment with Executive Grooming Studio has been cancelled. These were the details:',
             self::detailRows($booking),
             'Book a new appointment',
             $link

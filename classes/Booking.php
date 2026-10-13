@@ -14,7 +14,9 @@ class Booking
     //  - the appointment must finish before the stylist stops work
     //  - it must not overlap an existing booking (cancelled ones do not count)
     //  - it must be in the future
-    public static function getAvailableSlots(array $stylist, int $durationMinutes, DateTimeImmutable $date): array
+    // $ignoreBookingId lets a booking that is being moved ignore its own
+    // current slot (otherwise it would clash with itself).
+    public static function getAvailableSlots(array $stylist, int $durationMinutes, DateTimeImmutable $date, ?int $ignoreBookingId = null): array
     {
         $window = Stylist::getWorkingWindow($stylist['working_hours'], $date);
         if ($window === null) {
@@ -24,19 +26,23 @@ class Booking
 
         // Load this stylist's existing bookings that touch this working day.
         $db   = Database::getConnection();
-        $stmt = $db->prepare(
-            "SELECT start_time, end_time
-             FROM Booking
-             WHERE stylist_id = :stylist_id
-               AND status <> 'cancelled'
-               AND start_time < :close
-               AND end_time > :open"
-        );
-        $stmt->execute([
+        $sql    = "SELECT start_time, end_time
+                   FROM Booking
+                   WHERE stylist_id = :stylist_id
+                     AND status <> 'cancelled'
+                     AND start_time < :close
+                     AND end_time > :open";
+        $params = [
             ':stylist_id' => $stylist['stylist_id'],
             ':open'       => $open->format('Y-m-d H:i:s'),
             ':close'      => $close->format('Y-m-d H:i:s'),
-        ]);
+        ];
+        if ($ignoreBookingId !== null) {
+            $sql .= ' AND booking_id <> :ignore_id';
+            $params[':ignore_id'] = $ignoreBookingId;
+        }
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
         $booked = $stmt->fetchAll();
 
         $now      = new DateTimeImmutable('now');
@@ -78,6 +84,9 @@ class Booking
         ?string $notes
     ): ?string {
         $db = Database::getConnection();
+
+        // Every read inside this transaction must see the very latest saved data.
+        $db->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
         $db->beginTransaction();
 
         try {
@@ -143,8 +152,8 @@ class Booking
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
-                    s.name AS service_name, s.price,
+            'SELECT b.booking_id, b.stylist_id, b.service_id, b.start_time, b.end_time, b.status, b.notes,
+                    s.name AS service_name, s.price, s.duration_minutes,
                     st.name AS stylist_name,
                     c.name AS client_name, c.email AS client_email
              FROM Booking b
@@ -331,6 +340,158 @@ class Booking
             return 'That appointment is already marked as ' . $status . ', so it cannot be cancelled.';
         }
         return 'Only upcoming appointments can be cancelled. Use Completed or No-show for one that has started.';
+    }
+
+    // Clients can cancel or move their own booking online up to this many
+    // minutes before it starts. Staff are not limited by this.
+    // (A salon policy: change the number to suit.)
+    public const CLIENT_CHANGE_CUTOFF_MINUTES = 120;
+
+    // Can the CLIENT still change this booking? Takes a booking as returned by
+    // findByToken(). Returns '' if yes, otherwise a message explaining why not.
+    public static function clientChangeProblem(array $booking): string
+    {
+        if ($booking['status'] === 'cancelled') {
+            return 'This booking has been cancelled.';
+        }
+        if ($booking['status'] !== 'confirmed') {
+            return 'This booking is marked as ' . $booking['status'] . ', so it can no longer be changed.';
+        }
+
+        $latest = (new DateTimeImmutable($booking['start_time']))
+            ->modify('-' . self::CLIENT_CHANGE_CUTOFF_MINUTES . ' minutes');
+        if (new DateTimeImmutable('now') > $latest) {
+            $minutes = self::CLIENT_CHANGE_CUTOFF_MINUTES;
+            if ($minutes % 60 === 0) {
+                $hours = intdiv($minutes, 60);
+                $limit = $hours . ($hours === 1 ? ' hour' : ' hours');
+            } else {
+                $limit = $minutes . ' minutes';
+            }
+            return 'Bookings can be changed online up to ' . $limit . ' before the appointment. Please contact the salon.';
+        }
+        return '';
+    }
+
+    // The client cancels their own booking, using the secret token from their email.
+    // Returns '' when it worked, otherwise a message explaining why not.
+    public static function cancelByToken(string $token): string
+    {
+        $booking = self::findByToken($token);
+        if ($booking === null) {
+            return 'We could not find that booking.';
+        }
+
+        $problem = self::clientChangeProblem($booking);
+        if ($problem !== '') {
+            return $problem;
+        }
+        return self::cancel((int) $booking['booking_id']);
+    }
+
+    // Moves a booking to a new start time, with the SAME stylist and service.
+    // The end time is recalculated from the service's duration, availability is
+    // checked again under the same lock that protects new bookings, and the
+    // reminder is re-armed for the new time. The booking stays 'confirmed'.
+    // $clientRules is true for a client (who is stopped by the cut-off time).
+    // Returns '' when it worked, otherwise a message explaining why not.
+    public static function reschedule(int $bookingId, DateTimeImmutable $newStart, bool $clientRules): string
+    {
+        $db = Database::getConnection();
+
+        // Whose stylist is it? We must know this to lock the right diary. It is
+        // read BEFORE the transaction starts, because a read inside a
+        // transaction can freeze an out-of-date view of the data.
+        $first = $db->prepare('SELECT stylist_id FROM Booking WHERE booking_id = :id');
+        $first->execute([':id' => $bookingId]);
+        $stylistId = $first->fetchColumn();
+        if ($stylistId === false) {
+            return 'We could not find that booking.';
+        }
+
+        // Every read inside this transaction must see the very latest saved data.
+        $db->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        $db->beginTransaction();
+
+        try {
+            // Lock the stylist, exactly as a new booking does.
+            $lock = $db->prepare('SELECT stylist_id, working_hours FROM Stylist WHERE stylist_id = :id FOR UPDATE');
+            $lock->execute([':id' => $stylistId]);
+            $stylist = $lock->fetch();
+            if ($stylist === false) {
+                $db->rollBack();
+                return 'We could not find that booking.';
+            }
+
+            // Read the booking again, now that nobody else can change this stylist's diary.
+            $read = $db->prepare(
+                'SELECT b.booking_id, b.start_time, b.status, s.duration_minutes
+                 FROM Booking b
+                 JOIN Service s ON s.service_id = b.service_id
+                 WHERE b.booking_id = :id
+                 FOR UPDATE'
+            );
+            $read->execute([':id' => $bookingId]);
+            $booking = $read->fetch();
+            if ($booking === false) {
+                $db->rollBack();
+                return 'We could not find that booking.';
+            }
+
+            if ($booking['status'] !== 'confirmed') {
+                $db->rollBack();
+                return 'Only a confirmed booking can be moved. This one is ' . $booking['status'] . '.';
+            }
+            $currentStart = new DateTimeImmutable($booking['start_time']);
+            if ($currentStart <= new DateTimeImmutable('now')) {
+                $db->rollBack();
+                return 'This appointment has already started, so it cannot be moved.';
+            }
+            if ($clientRules) {
+                $problem = self::clientChangeProblem(['status' => 'confirmed', 'start_time' => $booking['start_time']]);
+                if ($problem !== '') {
+                    $db->rollBack();
+                    return $problem;
+                }
+            }
+            if ($newStart == $currentStart) {
+                $db->rollBack();
+                return 'That is already the time of this appointment.';
+            }
+
+            // Is the new time free? (the booking's own current slot does not count against it)
+            $duration = (int) $booking['duration_minutes'];
+            $isFree   = false;
+            foreach (self::getAvailableSlots($stylist, $duration, $newStart, $bookingId) as $slot) {
+                if ($slot == $newStart) {
+                    $isFree = true;
+                    break;
+                }
+            }
+            if (!$isFree) {
+                $db->rollBack();
+                return 'Sorry, that time is not available. Please choose another time.';
+            }
+
+            $newEnd = $newStart->add(new DateInterval('PT' . $duration . 'M'));
+            $db->prepare(
+                "UPDATE Booking
+                 SET start_time = :start_time, end_time = :end_time, reminder_sent = FALSE
+                 WHERE booking_id = :id AND status = 'confirmed'"
+            )->execute([
+                ':start_time' => $newStart->format('Y-m-d H:i:s'),
+                ':end_time'   => $newEnd->format('Y-m-d H:i:s'),
+                ':id'         => $bookingId,
+            ]);
+
+            $db->commit();
+            return '';
+        } catch (Throwable $ex) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $ex;
+        }
     }
 
     // Turns the dashboard's filters into the WHERE part of a query,

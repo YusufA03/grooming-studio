@@ -2,7 +2,7 @@
 // Small helpers shared by every page.
 
 // All times in the system use South African time.
-date_default_timezone_set('Africa/Johannesburg');
+require_once __DIR__ . '/timezone.php';
 
 // Makes text safe to show on a web page (stops injected HTML/scripts).
 function e(string $text): string

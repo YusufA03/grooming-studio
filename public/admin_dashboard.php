@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/helpers.php';
+require_once __DIR__ . '/../config/admin_nav.php';
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/Booking.php';
 require_once __DIR__ . '/../classes/Stylist.php';
@@ -175,6 +176,8 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                 <button type="submit" class="button">Log out</button>
             </form>
         </div>
+
+        <?= adminNav('bookings') ?>
 
         <?php if ($flash): ?>
             <p class="<?= $flash[0] === 'success' ? 'success' : 'error' ?>"><?= e($flash[1]) ?></p>

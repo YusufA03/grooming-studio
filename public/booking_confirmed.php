@@ -22,9 +22,19 @@ if ($booking === null && $error === null) {
     $error = 'We could not find that booking.';
 }
 
+// Short messages shown after a change. Only these fixed texts can ever appear.
+$notices = [
+    'rescheduled' => ['success', 'Your booking has been moved. We have emailed you the new details.'],
+    'cancelled'   => ['success', 'Your booking has been cancelled. We have emailed you a confirmation.'],
+    'notchanged'  => ['error',   'Sorry, that change could not be made.'],
+];
+$notice = $notices[(string) ($_GET['msg'] ?? '')] ?? null;
+
+$changeProblem = '';
 if ($booking !== null) {
-    $start = new DateTimeImmutable($booking['start_time']);
-    $end   = new DateTimeImmutable($booking['end_time']);
+    $start         = new DateTimeImmutable($booking['start_time']);
+    $end           = new DateTimeImmutable($booking['end_time']);
+    $changeProblem = Booking::clientChangeProblem($booking);
 }
 ?>
 <!DOCTYPE html>
@@ -32,13 +42,13 @@ if ($booking !== null) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Booking Confirmed - Executive Grooming Studio</title>
+    <title>Your Booking - Executive Grooming Studio</title>
     <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
     <header class="site-header">
         <h1>Executive Grooming Studio</h1>
-        <p>Booking confirmation</p>
+        <p>Your booking</p>
     </header>
 
     <main class="container">
@@ -46,7 +56,17 @@ if ($booking !== null) {
             <p class="error"><?= e($error) ?></p>
             <p><a href="index.php">&larr; Back to services</a></p>
         <?php else: ?>
-            <p class="success">Thank you, <?= e($booking['client_name']) ?>! Your booking is confirmed.</p>
+            <?php if ($notice): ?>
+                <p class="<?= $notice[0] ?>"><?= e($notice[1]) ?></p>
+            <?php endif; ?>
+
+            <?php if ($booking['status'] === 'confirmed'): ?>
+                <p class="success">Thank you, <?= e($booking['client_name']) ?>! Your booking is confirmed.</p>
+            <?php elseif ($booking['status'] === 'cancelled'): ?>
+                <p class="error">This booking has been cancelled.</p>
+            <?php else: ?>
+                <p class="success">This booking is marked as <?= e($booking['status']) ?>.</p>
+            <?php endif; ?>
 
             <section class="service-card">
                 <h3>Booking reference #<?= (int) $booking['booking_id'] ?></h3>
@@ -58,7 +78,23 @@ if ($booking !== null) {
                 <?php endif; ?>
             </section>
 
-            <p><a class="button" href="index.php">Back to services</a></p>
+            <?php if ($booking['status'] === 'confirmed'): ?>
+                <h2>Need to change it?</h2>
+                <?php if ($changeProblem === ''): ?>
+                    <div class="actions">
+                        <a class="button" href="reschedule.php?token=<?= e($token) ?>">Reschedule</a>
+                        <form method="post" action="cancel_booking.php" class="inline-form"
+                              onsubmit="return confirm('Cancel this booking?');">
+                            <input type="hidden" name="token" value="<?= e($token) ?>">
+                            <button type="submit" class="button">Cancel booking</button>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <p><?= e($changeProblem) ?></p>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <p><a href="index.php">&larr; Back to services</a></p>
         <?php endif; ?>
     </main>
 </body>

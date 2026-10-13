@@ -1,4 +1,7 @@
 <?php
+// Every class that touches dates loads this file, so the clock is always right.
+require_once __DIR__ . '/../config/timezone.php';
+
 // Creates one shared connection to the MySQL database.
 class Database
 {
