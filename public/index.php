@@ -51,7 +51,8 @@ $working = array_filter($stylists, function ($s) {
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="Book your appointment at Executive Grooming Studio online.">
     <title>Executive Grooming Studio</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= (int) @filemtime(__DIR__ . '/assets/css/style.css') ?>">
+    <script src="assets/js/theme.js?v=<?= (int) @filemtime(__DIR__ . '/assets/js/theme.js') ?>"></script>
 </head>
 <body>
     <header class="site-header">

@@ -94,7 +94,7 @@ class Auth
         if ($user['role'] !== $role) {
             http_response_code(403);
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
-               . '<title>No access</title><link rel="stylesheet" href="assets/css/style.css"></head><body>'
+               . '<title>No access</title><link rel="stylesheet" href="assets/css/style.css?v=' . (int) @filemtime(__DIR__ . '/../public/assets/css/style.css') . '"><script src="assets/js/theme.js"></script></head><body>'
                . '<header class="site-header"><h1>Executive Grooming Studio</h1></header>'
                . '<main class="container"><p class="error">You do not have access to this page.</p>'
                . '<p><a href="index.php">&larr; Back to the home page</a></p></main></body></html>';

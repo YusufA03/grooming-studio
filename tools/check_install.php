@@ -73,6 +73,7 @@ $files = [
     'public/reschedule.php'           => 'getAvailableSlots',
     'public/stylist_add_booking.php'  => 'add-booking v2',
     'public/stylist_schedule.php'     => 'stylist_add_booking.php',
+    'public/assets/js/theme.js'       => 'egs-theme',
     'tools/send_reminders.php'        => 'Reminder::sendDue',
     'tools/set_password.php'          => 'password_hash',
 ];
@@ -103,7 +104,7 @@ if ($cssFile === null) {
 } else {
     $css = (string) file_get_contents($cssFile);
     $missingCss = [];
-    foreach (['.schedule-table' => 'schedule/table styles', '.filter-form' => 'admin filter styles', '.slot form' => 'reschedule styles', '.service-image' => 'picture styles', '.service-thumb' => 'picture thumbnail styles', '.admin-nav' => 'admin menu styles', '.hero-title' => 'the new design (home page hero)'] as $needle => $what) {
+    foreach (['.schedule-table' => 'schedule/table styles', '.filter-form' => 'admin filter styles', '.slot form' => 'reschedule styles', '.service-image' => 'picture styles', '.service-thumb' => 'picture thumbnail styles', '.admin-nav' => 'admin menu styles', '.hero-title' => 'the new design (home page hero)', '.theme-toggle' => 'light/dark switch button'] as $needle => $what) {
         if (strpos($css, $needle) === false) { $missingCss[] = $what; }
     }
     $name = 'public/assets/css/' . basename($cssFile) . ($cssFile === $cssOff ? '  (switched OFF: renamed .off)' : '');
@@ -113,6 +114,21 @@ if ($cssFile === null) {
     } else {
         line('OK', $name);
     }
+}
+
+// does every page load the light/dark switch?
+$noSwitch = [];
+foreach (glob($root . '/public/*.php') as $page) {
+    $text = (string) file_get_contents($page);
+    if (strpos($text, 'assets/css/style.css') !== false && strpos($text, 'assets/js/theme.js') === false) {
+        $noSwitch[] = 'public/' . basename($page);
+    }
+}
+if (count($noSwitch) === 0) {
+    line('OK', 'every page loads the light/dark switch');
+} else {
+    line('FIX', count($noSwitch) . ' page(s) do not load the light/dark switch', 'run:  php tools\\apply_theme.php');
+    $fixes[] = 'run   php tools\\apply_theme.php   (adds the light/dark switch to ' . count($noSwitch) . ' pages)';
 }
 
 // ---------------------------------------------------------------- settings
@@ -128,6 +144,22 @@ foreach ([
     } else {
         line($level, $path, $why);
         if ($level === 'FIX') { $fixes[] = "missing $path"; } else { $warns++; }
+    }
+}
+
+// is email set up for REAL clients?
+if (is_file($root . '/config/mail_config.php')) {
+    $mailCfg = require $root . '/config/mail_config.php';
+    $local   = in_array($mailCfg['host'] ?? '', ['localhost', '127.0.0.1'], true) && (int) ($mailCfg['port'] ?? 0) === 1025;
+    if ($local) {
+        line('WARN', 'email goes to Mailpit (the local test mailbox)', 'fine for testing; for REAL clients switch to Gmail or Brevo in config/mail_config.php');
+        $warns++;
+    } else {
+        line('OK', 'email uses a real mail server (' . ($mailCfg['host'] ?? '?') . ':' . ($mailCfg['port'] ?? '?') . ')');
+    }
+    if (stripos((string) ($mailCfg['site_url'] ?? ''), 'localhost') !== false) {
+        line('WARN', 'site_url still says localhost', 'links inside emails only work on this computer; on the live site use its real address');
+        $warns++;
     }
 }
 

@@ -10,6 +10,37 @@ use PHPMailer\PHPMailer\PHPMailer;
 // undo a saved booking or a cancellation.
 class Mailer
 {
+    // The reason the most recent email could not be sent (null if it was sent).
+    // Used by the test page so a problem can be shown in plain words.
+    private static ?string $lastError = null;
+
+    public static function lastError(): ?string
+    {
+        return self::$lastError;
+    }
+
+    // Sends a short test email, to check the email settings. Returns true if
+    // the mail server accepted it; if not, lastError() says why.
+    public static function sendTest(string $toEmail): bool
+    {
+        $config = self::loadConfig();
+        if ($config === null) {
+            return false;
+        }
+
+        [$html, $text] = self::buildMessage(
+            'Your email settings work',
+            'there',
+            'This is a test message from Executive Grooming Studio. If you can read it, the system can send email to your clients.',
+            ['Sent at' => date('l, j F Y H:i')],
+            'Open the website',
+            rtrim($config['site_url'], '/') . '/index.php'
+        );
+
+        return self::send($config, $toEmail, 'Test recipient',
+            'Test email - Executive Grooming Studio', $html, $text);
+    }
+
     // Emails a booking confirmation to the client. When $rescheduled is true
     // it is the "updated confirmation" sent after the client moves the booking.
     public static function sendBookingConfirmation(array $booking, string $token, bool $rescheduled = false): bool
@@ -170,6 +201,7 @@ class Mailer
         $configFile   = __DIR__ . '/../config/mail_config.php';
 
         if (!is_file($autoloadFile) || !is_file($configFile)) {
+            self::$lastError = 'PHPMailer (the vendor folder) or config/mail_config.php is missing.';
             error_log('Email not sent: PHPMailer (vendor/) or config/mail_config.php is missing.');
             return null;
         }
@@ -181,6 +213,8 @@ class Mailer
     // Hands one email to the mail server.
     private static function send(array $config, string $toEmail, string $toName, string $subject, string $html, string $text): bool
     {
+        self::$lastError = null;
+
         try {
             $mail = new PHPMailer(true); // true = report problems as exceptions
             $mail->isSMTP();
@@ -221,6 +255,7 @@ class Mailer
 
             return true;
         } catch (Throwable $ex) {
+            self::$lastError = $ex->getMessage();
             error_log('Could not send email: ' . $ex->getMessage());
             return false;
         }

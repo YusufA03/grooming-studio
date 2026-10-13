@@ -225,7 +225,8 @@ $backLink     = $isAdmin ? ['admin_dashboard.php', 'Back to the bookings'] : ['s
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Add a Booking - Executive Grooming Studio</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= (int) @filemtime(__DIR__ . '/assets/css/style.css') ?>">
+    <script src="assets/js/theme.js?v=<?= (int) @filemtime(__DIR__ . '/assets/js/theme.js') ?>"></script>
 </head>
 <body>
     <header class="site-header">

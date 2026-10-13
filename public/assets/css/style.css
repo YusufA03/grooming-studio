@@ -580,3 +580,27 @@ input[type="file"]::-webkit-file-upload-button {
 @media (prefers-reduced-motion: no-preference) {
     .service-grid .service-card, .team-card { animation: rise 0.45s ease both; }
 }
+
+/* ---------- the light / dark switch (the button is added by assets/js/theme.js) ---------- */
+.theme-toggle {
+    position: absolute;
+    top: 50%;
+    right: max(1.25rem, calc((100% - var(--wrap)) / 2 + 1.25rem));
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    color: var(--text);
+    background: transparent;
+    border: 0.05rem solid var(--field-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.theme-toggle svg { display: block; width: 18px; height: 18px; }
+.theme-toggle .icon-sun { display: none; }
+:root[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+:root[data-theme="light"] .theme-toggle .icon-sun { display: block; }
