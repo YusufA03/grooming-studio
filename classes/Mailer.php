@@ -25,6 +25,7 @@ class Mailer
         if (!empty($booking['notes'])) {
             $rows['Your notes'] = $booking['notes'];
         }
+        $rows['Reminder'] = 'We will email you a reminder about an hour before your appointment.';
 
         $heading = $rescheduled ? 'Your booking has been rescheduled' : 'Your booking is confirmed';
         $intro   = $rescheduled
@@ -68,6 +69,35 @@ class Mailer
 
         return self::send($config, $booking['client_email'], $booking['client_name'],
             'Your appointment has been cancelled - Executive Grooming Studio', $html, $text);
+    }
+
+    // Emails the client a reminder that their appointment is coming up.
+    public static function sendBookingReminder(array $booking, string $token): bool
+    {
+        $config = self::loadConfig();
+        if ($config === null) {
+            return false;
+        }
+
+        $link  = rtrim($config['site_url'], '/') . '/booking_confirmed.php?token=' . $token;
+        $start = new DateTimeImmutable($booking['start_time']);
+
+        $rows = self::detailRows($booking);
+        if (!empty($booking['notes'])) {
+            $rows['Your notes'] = $booking['notes'];
+        }
+
+        [$html, $text] = self::buildMessage(
+            'Your appointment is coming up',
+            $booking['client_name'],
+            'This is a friendly reminder that your appointment with Executive Grooming Studio starts in about an hour.',
+            $rows,
+            'View your booking',
+            $link
+        );
+
+        return self::send($config, $booking['client_email'], $booking['client_name'],
+            'Reminder: your appointment at ' . $start->format('H:i') . ' - Executive Grooming Studio', $html, $text);
     }
 
     // The lines of booking details shown in an email.
