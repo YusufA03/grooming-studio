@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/AuditLog.php';
+require_once __DIR__ . '/Loyalty.php';
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/Stylist.php';
 require_once __DIR__ . '/Client.php';
@@ -82,7 +84,9 @@ class Booking
         ?string $clientEmail,
         ?string $clientPhone,
         ?string $notes,
-        ?string $inspirationImage = null
+        ?string $inspirationImage = null,
+        ?string $allergies = null,
+        string $actor = 'Client (online)'
     ): ?string {
         $db = Database::getConnection();
 
@@ -123,9 +127,9 @@ class Booking
 
             $insert = $db->prepare(
                 "INSERT INTO Booking
-                    (client_id, stylist_id, service_id, start_time, end_time, status, notes, inspiration_image, manage_token)
+                    (client_id, stylist_id, service_id, start_time, end_time, status, notes, allergies, price_charged, inspiration_image, manage_token)
                  VALUES
-                    (:client_id, :stylist_id, :service_id, :start_time, :end_time, 'confirmed', :notes, :image, :token)"
+                    (:client_id, :stylist_id, :service_id, :start_time, :end_time, 'confirmed', :notes, :allergies, :price, :image, :token)"
             );
             $insert->execute([
                 ':client_id'  => $clientId,
@@ -134,9 +138,20 @@ class Booking
                 ':start_time' => $start->format('Y-m-d H:i:s'),
                 ':end_time'   => $end->format('Y-m-d H:i:s'),
                 ':notes'      => $notes,
+                ':allergies'  => $allergies,
+                ':price'      => $service['price'],
                 ':image'      => $inspirationImage,
                 ':token'      => $token,
             ]);
+
+            // The audit line is saved in the same transaction as the booking itself.
+            AuditLog::record(
+                $db,
+                (int) $db->lastInsertId(),
+                'created',
+                $actor,
+                $service['name'] . ' with ' . $stylist['name'] . ' at ' . $start->format('Y-m-d H:i')
+            );
 
             $db->commit();
             return $token;
@@ -154,7 +169,7 @@ class Booking
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            'SELECT b.booking_id, b.stylist_id, b.service_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
+            'SELECT b.booking_id, b.client_id, b.stylist_id, b.service_id, b.start_time, b.end_time, b.status, b.notes, b.allergies, b.price_charged, b.inspiration_image,
                     s.name AS service_name, s.price, s.duration_minutes,
                     st.name AS stylist_name,
                     c.name AS client_name, c.email AS client_email
@@ -175,7 +190,7 @@ class Booking
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
+            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.allergies, b.price_charged, b.inspiration_image,
                     s.name AS service_name,
                     c.name AS client_name
              FROM Booking b
@@ -200,31 +215,47 @@ class Booking
     //  - it must still be 'confirmed' (completed / no-show are final)
     //  - it must have already started
     // Returns '' when it worked, otherwise a message explaining why not.
-    public static function recordOutcome(int $bookingId, int $stylistId, string $outcome): string
+    public static function recordOutcome(int $bookingId, int $stylistId, string $outcome, string $actor = 'Stylist'): string
     {
         if (!in_array($outcome, ['completed', 'no-show'], true)) {
             return 'That is not a valid choice.';
         }
 
-        $db     = Database::getConnection();
-        $now    = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
-        $update = $db->prepare(
-            "UPDATE Booking
-             SET status = :outcome
-             WHERE booking_id = :id
-               AND stylist_id = :stylist_id
-               AND status = 'confirmed'
-               AND start_time <= :now"
-        );
-        $update->execute([
-            ':outcome'    => $outcome,
-            ':id'         => $bookingId,
-            ':stylist_id' => $stylistId,
-            ':now'        => $now,
-        ]);
+        $db  = Database::getConnection();
+        $now = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 
-        if ($update->rowCount() === 1) {
-            return '';
+        // The new status, its audit line and any loyalty points are saved together, or not at all.
+        $db->beginTransaction();
+        try {
+            $update = $db->prepare(
+                "UPDATE Booking
+                 SET status = :outcome
+                 WHERE booking_id = :id
+                   AND stylist_id = :stylist_id
+                   AND status = 'confirmed'
+                   AND start_time <= :now"
+            );
+            $update->execute([
+                ':outcome'    => $outcome,
+                ':id'         => $bookingId,
+                ':stylist_id' => $stylistId,
+                ':now'        => $now,
+            ]);
+
+            if ($update->rowCount() === 1) {
+                AuditLog::record($db, $bookingId, $outcome, $actor, null);
+                if ($outcome === 'completed') {
+                    Loyalty::awardForBooking($db, $bookingId);
+                }
+                $db->commit();
+                return '';
+            }
+            $db->rollBack();
+        } catch (Throwable $ex) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $ex;
         }
 
         // It did not change anything, so find out why (still only this stylist's own booking).
@@ -252,7 +283,7 @@ class Booking
     {
         [$where, $params] = self::buildFilter($filters);
 
-        $sql = 'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
+        $sql = 'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.allergies, b.price_charged, b.inspiration_image,
                        s.name  AS service_name,
                        st.name AS stylist_name,
                        c.name  AS client_name,
@@ -291,10 +322,10 @@ class Booking
     public static function findDetails(int $bookingId): ?array
     {
         $stmt = Database::getConnection()->prepare(
-            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
-                    s.name AS service_name, s.price,
+            'SELECT b.booking_id, b.client_id, b.stylist_id, b.manage_token, b.start_time, b.end_time, b.status, b.notes, b.allergies, b.price_charged, b.inspiration_image,
+                    s.name AS service_name, s.price, s.duration_minutes,
                     st.name AS stylist_name,
-                    c.name AS client_name, c.email AS client_email
+                    c.name AS client_name, c.email AS client_email, c.phone AS client_phone
              FROM Booking b
              JOIN Service s  ON s.service_id  = b.service_id
              JOIN Stylist st ON st.stylist_id = b.stylist_id
@@ -333,21 +364,38 @@ class Booking
     // the availability check ignores cancelled bookings.
     // Rules: it must still be 'confirmed' and must not have started yet.
     // Returns '' when it worked, otherwise a message explaining why not.
-    public static function cancel(int $bookingId): string
+    public static function cancel(int $bookingId, string $actor = 'System'): string
     {
-        $db     = Database::getConnection();
-        $now    = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
-        $update = $db->prepare(
-            "UPDATE Booking
-             SET status = 'cancelled'
-             WHERE booking_id = :id
-               AND status = 'confirmed'
-               AND start_time > :now"
-        );
-        $update->execute([':id' => $bookingId, ':now' => $now]);
+        $db  = Database::getConnection();
+        $now = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 
-        if ($update->rowCount() === 1) {
-            return '';
+        // The cancellation and its audit line are saved together, or not at all.
+        $db->beginTransaction();
+        try {
+            $before = $db->prepare('SELECT start_time FROM Booking WHERE booking_id = :id');
+            $before->execute([':id' => $bookingId]);
+            $wasAt = $before->fetchColumn();
+
+            $update = $db->prepare(
+                "UPDATE Booking
+                 SET status = 'cancelled'
+                 WHERE booking_id = :id
+                   AND status = 'confirmed'
+                   AND start_time > :now"
+            );
+            $update->execute([':id' => $bookingId, ':now' => $now]);
+
+            if ($update->rowCount() === 1) {
+                AuditLog::record($db, $bookingId, 'cancelled', $actor, 'The appointment was at ' . substr((string) $wasAt, 0, 16));
+                $db->commit();
+                return '';
+            }
+            $db->rollBack();
+        } catch (Throwable $ex) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $ex;
         }
 
         // It did not change anything, so find out why.
@@ -400,7 +448,7 @@ class Booking
 
     // The client cancels their own booking, using the secret token from their email.
     // Returns '' when it worked, otherwise a message explaining why not.
-    public static function cancelByToken(string $token): string
+    public static function cancelByToken(string $token, string $actor = 'Client (private link)'): string
     {
         $booking = self::findByToken($token);
         if ($booking === null) {
@@ -411,7 +459,7 @@ class Booking
         if ($problem !== '') {
             return $problem;
         }
-        return self::cancel((int) $booking['booking_id']);
+        return self::cancel((int) $booking['booking_id'], $actor);
     }
 
     // Moves a booking to a new start time, with the SAME stylist and service.
@@ -420,7 +468,7 @@ class Booking
     // reminder is re-armed for the new time. The booking stays 'confirmed'.
     // $clientRules is true for a client (who is stopped by the cut-off time).
     // Returns '' when it worked, otherwise a message explaining why not.
-    public static function reschedule(int $bookingId, DateTimeImmutable $newStart, bool $clientRules): string
+    public static function reschedule(int $bookingId, DateTimeImmutable $newStart, bool $clientRules, string $actor = 'System'): string
     {
         $db = Database::getConnection();
 
@@ -509,6 +557,14 @@ class Booking
                 ':id'         => $bookingId,
             ]);
 
+            AuditLog::record(
+                $db,
+                $bookingId,
+                'rescheduled',
+                $actor,
+                $currentStart->format('Y-m-d H:i') . ' moved to ' . $newStart->format('Y-m-d H:i')
+            );
+
             $db->commit();
             return '';
         } catch (Throwable $ex) {
@@ -554,6 +610,48 @@ class Booking
     }
 
     // Two appointments overlap when each one starts before the other ends.
+    // Smart scheduling (Phase 4, Section 4.6): the SOONEST free time for a service.
+    // $preferred is the stylist the client chose, or null for "any available stylist".
+    // The preferred stylist's soonest time wins. If that stylist has nothing free within
+    // $horizonDays, the soonest time with any other stylist is suggested instead.
+    // Returns ['stylist' => array, 'start' => DateTimeImmutable, 'preferred' => bool], or null
+    // when nobody has a free time in that period. 'preferred' is false only for the fallback.
+    public static function suggestSlot(array $stylists, ?array $preferred, int $durationMinutes, int $horizonDays = 21): ?array
+    {
+        $today = new DateTimeImmutable('today');
+
+        if ($preferred !== null) {
+            $own = self::soonestFor($preferred, $durationMinutes, $today, $horizonDays);
+            if ($own !== null) {
+                return ['stylist' => $preferred, 'start' => $own, 'preferred' => true];
+            }
+        }
+
+        $best = null;
+        foreach ($stylists as $other) {
+            if ($preferred !== null && (int) $other['stylist_id'] === (int) $preferred['stylist_id']) {
+                continue;
+            }
+            $time = self::soonestFor($other, $durationMinutes, $today, $horizonDays);
+            if ($time !== null && ($best === null || $time < $best['start'])) {
+                $best = ['stylist' => $other, 'start' => $time, 'preferred' => ($preferred === null)];
+            }
+        }
+        return $best;
+    }
+
+    // The first free start time for one stylist, looking day by day. Null if none within $horizonDays.
+    private static function soonestFor(array $stylist, int $durationMinutes, DateTimeImmutable $firstDay, int $horizonDays): ?DateTimeImmutable
+    {
+        for ($i = 0; $i < $horizonDays; $i++) {
+            $slots = self::getAvailableSlots($stylist, $durationMinutes, $firstDay->add(new DateInterval('P' . $i . 'D')));
+            if (count($slots) > 0) {
+                return $slots[0];
+            }
+        }
+        return null;
+    }
+
     private static function overlapsAny(DateTimeImmutable $start, DateTimeImmutable $end, array $booked): bool
     {
         foreach ($booked as $row) {

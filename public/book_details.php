@@ -11,14 +11,14 @@ $input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
 
 $serviceId = filter_var($input['service_id'] ?? null, FILTER_VALIDATE_INT);
 $stylistId = filter_var($input['stylist_id'] ?? null, FILTER_VALIDATE_INT);
-$startText = (string) ($input['start'] ?? '');
+$startText = inputText($input, 'start', '');
 
 $service = null;
 $stylist = null;
 $start   = null;
 $error   = null;
 $errors  = [];   // problems with individual form fields
-$name = $email = $phone = $notes = '';
+$name = $email = $phone = $notes = $allergies = '';
 
 // Did the whole form get thrown away because the photo was bigger than the server allows?
 $uploadTooBig = ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0);
@@ -73,10 +73,11 @@ $backUrl = ($service !== null) ? 'book.php?service_id=' . (int) $service['servic
 
 // The form was sent: check every field, then save.
 if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name  = trim((string) ($_POST['name'] ?? ''));
-    $email = trim((string) ($_POST['email'] ?? ''));
-    $phone = trim((string) ($_POST['phone'] ?? ''));
-    $notes = trim((string) ($_POST['notes'] ?? ''));
+    $name  = trim(inputText($_POST, 'name', ''));
+    $email = trim(inputText($_POST, 'email', ''));
+    $phone = trim(inputText($_POST, 'phone', ''));
+    $notes = trim(inputText($_POST, 'notes', ''));
+    $allergies = trim(inputText($_POST, 'allergies', ''));
 
     if ($name === '' || mb_strlen($name) > 100) {
         $errors['name'] = 'Please enter your name (up to 100 characters).';
@@ -89,6 +90,9 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (mb_strlen($notes) > 1000) {
         $errors['notes'] = 'Notes can be up to 1000 characters.';
+    }
+    if (mb_strlen($allergies) > 500) {
+        $errors['allergies'] = 'Allergies and sensitivities can be up to 500 characters.';
     }
 
     // The optional inspiration photo. A browser cannot keep a chosen file when a form
@@ -114,7 +118,8 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $email,
                 $phone === '' ? null : $phone,
                 $notes === '' ? null : $notes,
-                $imageName
+                $imageName,
+                $allergies === '' ? null : $allergies
             );
 
             if ($token === null) {
@@ -191,9 +196,15 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="tel" name="phone" id="phone" maxlength="20" value="<?= e($phone) ?>">
                 <?php if (isset($errors['phone'])): ?><p class="field-error"><?= e($errors['phone']) ?></p><?php endif; ?>
 
+                <label for="allergies">Allergies or sensitivities (optional)</label>
+                <textarea name="allergies" id="allergies" maxlength="500" rows="2"
+                          placeholder="For example: allergic to ammonia, sensitive to fragrance"><?= e($allergies) ?></textarea>
+                <p class="field-hint">Your stylist sees this, highlighted, before you arrive.</p>
+                <?php if (isset($errors['allergies'])): ?><p class="field-error"><?= e($errors['allergies']) ?></p><?php endif; ?>
+
                 <label for="notes">Notes for your stylist (optional)</label>
                 <textarea name="notes" id="notes" maxlength="1000"
-                          placeholder="Allergies, the style you want, anything we should know"><?= e($notes) ?></textarea>
+                          placeholder="The style you want, anything we should know"><?= e($notes) ?></textarea>
                 <?php if (isset($errors['notes'])): ?><p class="field-error"><?= e($errors['notes']) ?></p><?php endif; ?>
 
                 <label for="inspiration">Inspiration photo (optional)</label>

@@ -15,7 +15,7 @@ $view  = (($input['view'] ?? 'day') === 'week') ? 'week' : 'day';
 
 $date        = new DateTimeImmutable('today');
 $dateProblem = null;
-$dateInput   = (string) ($input['date'] ?? '');
+$dateInput   = inputText($input, 'date', '');
 if ($dateInput !== '') {
     $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $dateInput);
     if ($parsed !== false && $parsed->format('Y-m-d') === $dateInput) {
@@ -36,16 +36,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['error', 'Your session expired. Please try again.'];
     } else {
         $bookingId = filter_var($_POST['booking_id'] ?? null, FILTER_VALIDATE_INT);
-        $outcome   = (string) ($_POST['outcome'] ?? '');
+        $outcome   = inputText($_POST, 'outcome', '');
 
         if ($bookingId === false) {
             $_SESSION['flash'] = ['error', 'We could not find that appointment.'];
         } else {
             try {
-                $problem = Booking::recordOutcome($bookingId, $stylistId, $outcome);
-                $_SESSION['flash'] = ($problem === '')
-                    ? ['success', 'The appointment was marked as ' . $outcome . '.']
-                    : ['error', $problem];
+                $problem = Booking::recordOutcome($bookingId, $stylistId, $outcome, Auth::actorLabel($user));
+                if ($problem === '') {
+                    $earned = ($outcome === 'completed') ? Loyalty::earnedForBooking($bookingId) : 0;
+                    $_SESSION['flash'] = ['success', 'The appointment was marked as ' . $outcome . '.'
+                        . ($earned > 0 ? ' The client earned ' . $earned . ' loyalty points.' : '')];
+                } else {
+                    $_SESSION['flash'] = ['error', $problem];
+                }
             } catch (PDOException $ex) {
                 error_log('Could not record outcome: ' . $ex->getMessage());
                 $_SESSION['flash'] = ['error', 'Sorry, something went wrong on our side. Please try again.'];
@@ -157,7 +161,7 @@ $now = new DateTimeImmutable('now');
                                 <th>Client</th>
                                 <th>Service</th>
                                 <th>Status</th>
-                                <th>Notes</th>
+                                <th>Allergies and notes</th>
                                 <th>Photo</th>
                                 <th>Action</th>
                             </tr>
@@ -174,7 +178,10 @@ $now = new DateTimeImmutable('now');
                                     <td><?= e($b['client_name']) ?></td>
                                     <td><?= e($b['service_name']) ?></td>
                                     <td><?= e($b['status']) ?></td>
-                                    <td><?= $b['notes'] ? nl2br(e($b['notes'])) : '-' ?></td>
+                                    <td>
+                                        <?php if (!empty($b['allergies'])): ?><span class="allergy-alert">Allergies: <?= e($b['allergies']) ?></span><?php endif; ?>
+                                        <?= $b['notes'] ? nl2br(e($b['notes'])) : (empty($b['allergies']) ? '-' : '') ?>
+                                    </td>
                                     <td>
                                         <?php if (!empty($b['inspiration_image'])): ?>
                                             <a href="inspiration_image.php?booking_id=<?= (int) $b['booking_id'] ?>" target="_blank" rel="noopener">

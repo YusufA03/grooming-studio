@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$token = (string) ($_POST['token'] ?? '');
+$token = inputText($_POST, 'token', '');
 if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
     header('Location: index.php');
     exit;

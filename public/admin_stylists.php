@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         backToStylists();
     }
 
-    $action    = (string) ($_POST['action'] ?? '');
+    $action    = inputText($_POST, 'action', '');
     $stylistId = filter_var($_POST['stylist_id'] ?? null, FILTER_VALIDATE_INT);
 
     try {

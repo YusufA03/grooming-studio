@@ -6,13 +6,29 @@ class Client
 {
     // Finds a client by email and updates their name and phone to the latest
     // details given, or creates a new client. Returns the client's id.
-    // A client with no email address (for example someone who phoned the
-    // salon) cannot be recognised again, so each one is saved as a new client.
+    // A client with no email address (for example someone who phoned the salon) is recognised
+    // again only when BOTH the name and the phone number (digits only) are the same, so two
+    // different people who share a phone are never merged. This is what lets a phone-only
+    // client keep earning loyalty points.
     public static function findOrCreate(string $name, ?string $email, ?string $phone): int
     {
         $db = Database::getConnection();
 
         if ($email === null) {
+            $digits = preg_replace('/\D+/', '', (string) $phone);
+            if ($digits !== '') {
+                $same = $db->prepare(
+                    "SELECT client_id FROM Client
+                     WHERE email IS NULL AND LOWER(name) = LOWER(:name)
+                       AND REGEXP_REPLACE(phone, '[^0-9]', '') = :digits
+                     ORDER BY client_id LIMIT 1"
+                );
+                $same->execute([':name' => trim($name), ':digits' => $digits]);
+                $knownId = $same->fetchColumn();
+                if ($knownId !== false) {
+                    return (int) $knownId;
+                }
+            }
             $db->prepare('INSERT INTO Client (name, email, phone) VALUES (:name, NULL, :phone)')
                ->execute([':name' => $name, ':phone' => $phone]);
             return (int) $db->lastInsertId();

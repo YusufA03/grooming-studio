@@ -7,6 +7,8 @@ function adminNav(string $current): string
         'addbooking' => ['stylist_add_booking.php', 'Add booking'],
         'services'   => ['admin_services.php',      'Services'],
         'stylists'   => ['admin_stylists.php',      'Stylists'],
+        'reports'    => ['admin_reports.php',       'Reports'],
+        'loyalty'    => ['admin_loyalty.php',       'Loyalty'],
     ];
 
     $parts = [];

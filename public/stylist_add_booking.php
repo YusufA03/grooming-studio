@@ -37,7 +37,7 @@ $service     = null;
 $date        = null;
 $start       = null;
 $slots       = [];
-$clientName  = $clientEmail = $clientPhone = $notes = '';
+$clientName  = $clientEmail = $clientPhone = $notes = $allergies = '';
 
 try {
     $services = Service::getAll();
@@ -85,7 +85,7 @@ if ($error === null && $stylist !== null) {
     }
 
     // ---- Which day? ----
-    $dateText = (string) ($input['date'] ?? '');
+    $dateText = inputText($input, 'date', '');
     if ($service !== null && $dateText !== '') {
         $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $dateText);
         if ($parsed === false || $parsed->format('Y-m-d') !== $dateText) {
@@ -108,7 +108,7 @@ if ($error === null && $stylist !== null) {
     }
 
     // ---- Has a time been picked? ----
-    $startText = (string) ($input['start'] ?? '');
+    $startText = inputText($input, 'start', '');
     if ($startText !== '' && $service !== null && $date !== null && $notice === null) {
         $parsed = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $startText);
         if ($parsed === false || $parsed->format('Y-m-d H:i') !== $startText) {
@@ -130,10 +130,11 @@ if ($error === null && $stylist !== null) {
 
     // ---- The client's details were sent: check them, then save ----
     if ($start !== null && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $clientName  = trim((string) ($_POST['client_name'] ?? ''));
-        $clientEmail = trim((string) ($_POST['client_email'] ?? ''));
-        $clientPhone = trim((string) ($_POST['client_phone'] ?? ''));
-        $notes       = trim((string) ($_POST['notes'] ?? ''));
+        $clientName  = trim(inputText($_POST, 'client_name', ''));
+        $clientEmail = trim(inputText($_POST, 'client_email', ''));
+        $clientPhone = trim(inputText($_POST, 'client_phone', ''));
+        $notes       = trim(inputText($_POST, 'notes', ''));
+        $allergies   = trim(inputText($_POST, 'allergies', ''));
 
         if (!Auth::csrfValid($_POST['csrf_token'] ?? null)) {
             $errors['form'] = 'Your session expired. Please try again.';
@@ -152,6 +153,9 @@ if ($error === null && $stylist !== null) {
         }
         if (mb_strlen($notes) > 1000) {
             $errors['notes'] = 'Notes can be up to 1000 characters.';
+        }
+        if (mb_strlen($allergies) > 500) {
+            $errors['allergies'] = 'Allergies and sensitivities can be up to 500 characters.';
         }
 
         // The optional photo (for example one the client sent on WhatsApp).
@@ -176,7 +180,9 @@ if ($error === null && $stylist !== null) {
                     $clientEmail === '' ? null : $clientEmail,
                     $clientPhone === '' ? null : $clientPhone,
                     $notes === '' ? null : $notes,
-                    $imageName
+                    $imageName,
+                    $allergies === '' ? null : $allergies,
+                    Auth::actorLabel($user) . ' (phone booking)'
                 );
 
                 if ($token === null) {
@@ -361,9 +367,15 @@ $backLink     = $isAdmin ? ['admin_dashboard.php', 'Back to the bookings'] : ['s
                     <?php if (isset($errors['client_email'])): ?><p class="field-error"><?= e($errors['client_email']) ?></p><?php endif; ?>
                     <?php if (isset($errors['contact'])): ?><p class="field-error"><?= e($errors['contact']) ?></p><?php endif; ?>
 
+                    <label for="allergies">Allergies or sensitivities (optional)</label>
+                    <textarea name="allergies" id="allergies" maxlength="500" rows="2"
+                              placeholder="For example: allergic to ammonia, sensitive to fragrance"><?= e($allergies) ?></textarea>
+                    <p class="field-hint">Your stylist sees this, highlighted, before you arrive.</p>
+                    <?php if (isset($errors['allergies'])): ?><p class="field-error"><?= e($errors['allergies']) ?></p><?php endif; ?>
+
                     <label for="notes">Notes (optional)</label>
                     <textarea name="notes" id="notes" maxlength="1000"
-                              placeholder="Allergies, the style wanted, anything to remember"><?= e($notes) ?></textarea>
+                              placeholder="The style wanted, anything to remember"><?= e($notes) ?></textarea>
                     <?php if (isset($errors['notes'])): ?><p class="field-error"><?= e($errors['notes']) ?></p><?php endif; ?>
 
                     <label for="inspiration">Inspiration photo (optional)</label>

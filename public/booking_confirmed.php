@@ -6,7 +6,7 @@ $booking = null;
 $error   = null;
 
 // The secret token must be exactly 64 letters/numbers (a-f, 0-9).
-$token = (string) ($_GET['token'] ?? '');
+$token = inputText($_GET, 'token', '');
 
 if (preg_match('/^[a-f0-9]{64}$/', $token)) {
     try {
@@ -28,7 +28,7 @@ $notices = [
     'cancelled'   => ['success', 'Your booking has been cancelled. We have emailed you a confirmation.'],
     'notchanged'  => ['error',   'Sorry, that change could not be made.'],
 ];
-$notice = $notices[(string) ($_GET['msg'] ?? '')] ?? null;
+$notice = $notices[inputText($_GET, 'msg', '')] ?? null;
 
 $changeProblem = '';
 if ($booking !== null) {
@@ -74,6 +74,9 @@ if ($booking !== null) {
                 <p><strong><?= e($booking['service_name']) ?></strong> with <?= e($booking['stylist_name']) ?></p>
                 <p><?= e($start->format('l, j F Y')) ?>, <?= e($start->format('H:i')) ?> to <?= e($end->format('H:i')) ?></p>
                 <p class="meta">R<?= number_format((float) $booking['price'], 2) ?> (paid in the salon)</p>
+                <?php if (!empty($booking['allergies'])): ?>
+                    <p><strong>Allergies or sensitivities you told us about:</strong><br><?= nl2br(e($booking['allergies'])) ?></p>
+                <?php endif; ?>
                 <?php if ($booking['notes']): ?>
                     <p><strong>Your notes:</strong><br><?= nl2br(e($booking['notes'])) ?></p>
                 <?php endif; ?>
@@ -81,6 +84,19 @@ if ($booking !== null) {
                     <p><strong>Your inspiration photo:</strong><br>
                         <img class="inspiration-preview" src="inspiration_image.php?token=<?= e($token) ?>" alt="The inspiration photo you sent">
                     </p>
+                <?php endif; ?>
+                <?php
+                $loyaltyPoints = null;
+                try {
+                    $loyaltyPoints = Loyalty::balance((int) $booking['client_id']);
+                } catch (Throwable $loyaltyEx) {
+                    error_log('Could not read loyalty points: ' . $loyaltyEx->getMessage());
+                }
+                ?>
+                <?php if ($loyaltyPoints !== null): ?>
+                    <p class="loyalty-note"><strong>Your loyalty points: <?= (int) $loyaltyPoints ?></strong><br>
+                        You earn 1 point for every R<?= (int) Loyalty::RAND_PER_POINT ?> of a completed appointment.
+                        Ask us in the salon to exchange <?= (int) Loyalty::REDEEM_POINTS ?> points for R<?= (int) Loyalty::REDEEM_VALUE ?> off.</p>
                 <?php endif; ?>
             </section>
 

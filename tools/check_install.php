@@ -77,6 +77,12 @@ $files = [
     'public/inspiration_image.php'    => 'photoNotFound',
     'tools/cleanup_images.php'        => 'Privacy housekeeping',
     'tools/backup_db.php'             => 'Makes a backup copy',
+    'classes/AuditLog.php'            => 'The audit trail',
+    'classes/Loyalty.php'             => 'Loyalty points (Phase 1',
+    'classes/Report.php'              => 'administrator\'s reports',
+    'public/admin_reports.php'        => 'Reports - Executive Grooming Studio',
+    'public/admin_loyalty.php'        => 'Loyalty Points - Executive Grooming Studio',
+    'public/admin_booking.php'        => 'Booking History - Executive Grooming Studio',
     'tools/send_reminders.php'        => 'Reminder::sendDue',
     'tools/set_password.php'          => 'password_hash',
 ];
@@ -189,11 +195,11 @@ if ($db !== null) {
         $r = $q->fetch();
         return $r === false ? null : $r;
     };
-    foreach (['Client', 'Stylist', 'Service', 'Booking', 'Administrator'] as $table) {
+    foreach (['Client', 'Stylist', 'Service', 'Booking', 'Administrator', 'BookingLog', 'LoyaltyLedger'] as $table) {
         $q = $db->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :t');
         $q->execute([':t' => $table]);
         $has = (int) $q->fetchColumn() > 0;
-        line($has ? 'OK' : 'FIX', "table $table", $has ? '' : 'missing: import database/schema.sql');
+        line($has ? 'OK' : 'FIX', "table $table", $has ? '' : (in_array($table, ['BookingLog', 'LoyaltyLedger'], true) ? 'run database/migration_2026_10_15.sql in phpMyAdmin (Import tab). It is safe to run twice and deletes nothing.' : 'missing: import database/schema.sql'));
         if (!$has) { $fixes[] = "missing table $table"; }
     }
     $r = $col('Service', 'image');
@@ -203,10 +209,10 @@ if ($db !== null) {
     $ok = $r && $r['is_nullable'] === 'YES';
     line($ok ? 'OK' : 'FIX', 'Client.email may be empty (for phone bookings)', $ok ? '' : 'run in phpMyAdmin:  ALTER TABLE Client MODIFY email VARCHAR(150) NULL;');
     if (!$ok) { $fixes[] = 'database: let Client.email be empty'; }
-    foreach (['Booking' => ['manage_token', 'reminder_sent'], 'Stylist' => ['email', 'password_hash']] as $table => $cols) {
+    foreach (['Booking' => ['manage_token', 'reminder_sent', 'allergies', 'price_charged'], 'Stylist' => ['email', 'password_hash']] as $table => $cols) {
         foreach ($cols as $c) {
             $r = $col($table, $c);
-            line($r ? 'OK' : 'FIX', "$table.$c", $r ? '' : 'missing: your database is older than the project; re-import database/schema.sql');
+            line($r ? 'OK' : 'FIX', "$table.$c", $r ? '' : 'missing: your database is older than the project. run database/migration_2026_10_15.sql in phpMyAdmin (Import tab). It is safe to run twice and deletes nothing.');
             if (!$r) { $fixes[] = "database: $table.$c missing"; }
         }
     }

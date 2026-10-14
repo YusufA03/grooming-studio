@@ -75,6 +75,9 @@ class Mailer
         if (!empty($booking['notes'])) {
             $rows['Your notes'] = $booking['notes'];
         }
+        if (!empty($booking['allergies'])) {
+            $rows['Allergies or sensitivities'] = $booking['allergies'];
+        }
         $rows['Reminder'] = 'We will email you a reminder about an hour before your appointment.';
 
         $heading = $rescheduled ? 'Your booking has been rescheduled' : 'Your booking is confirmed';
@@ -143,6 +146,9 @@ class Mailer
         $rows = self::detailRows($booking);
         if (!empty($booking['notes'])) {
             $rows['Your notes'] = $booking['notes'];
+        }
+        if (!empty($booking['allergies'])) {
+            $rows['Allergies or sensitivities'] = $booking['allergies'];
         }
 
         [$html, $text] = self::buildMessage(

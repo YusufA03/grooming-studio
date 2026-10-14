@@ -19,8 +19,8 @@ $error = null;
 $email = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = trim((string) ($_POST['email'] ?? ''));
-    $password = (string) ($_POST['password'] ?? '');
+    $email    = trim(inputText($_POST, 'email', ''));
+    $password = inputText($_POST, 'password', '');
 
     if (!Auth::csrfValid($_POST['csrf_token'] ?? null)) {
         $error = 'Your session expired. Please try again.';

@@ -15,7 +15,7 @@ $allStatuses = ['confirmed', 'completed', 'no-show', 'cancelled'];
 // Reads a date typed into a filter. Returns null (and notes a problem) if it is not a real date.
 function readDate(array $input, string $key, string $label, array &$problems): ?DateTimeImmutable
 {
-    $text = trim((string) ($input[$key] ?? ''));
+    $text = trim(inputText($input, $key));
     if ($text === '') {
         return null;
     }
@@ -51,7 +51,7 @@ if ($from !== null && $to !== null && $from > $to) {
 }
 
 $stylistId   = null;
-$stylistText = trim((string) ($input['stylist_id'] ?? ''));
+$stylistText = trim(inputText($input, 'stylist_id', ''));
 if ($stylistText !== '') {
     $wanted = filter_var($stylistText, FILTER_VALIDATE_INT);
     $known  = array_map('intval', array_column($stylists, 'stylist_id'));
@@ -63,7 +63,7 @@ if ($stylistText !== '') {
 }
 
 $status     = null;
-$statusText = trim((string) ($input['status'] ?? ''));
+$statusText = trim(inputText($input, 'status', ''));
 if ($statusText !== '') {
     if (in_array($statusText, $allStatuses, true)) {
         $status = $statusText;
@@ -72,7 +72,7 @@ if ($statusText !== '') {
     }
 }
 
-$q = mb_substr(trim((string) ($input['q'] ?? '')), 0, 100);
+$q = mb_substr(trim(inputText($input, 'q', '')), 0, 100);
 
 $page = filter_var($input['page'] ?? 1, FILTER_VALIDATE_INT);
 if ($page === false || $page < 1) {
@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash'] = ['error', 'We could not find that appointment.'];
         } else {
             try {
-                $problem = Booking::cancel($bookingId);
+                $problem = Booking::cancel($bookingId, Auth::actorLabel($user));
                 if ($problem !== '') {
                     $_SESSION['flash'] = ['error', $problem];
                 } else {
@@ -240,7 +240,7 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                         <th>Stylist</th>
                         <th>Service</th>
                         <th>Status</th>
-                        <th>Notes</th>
+                        <th>Allergies and notes</th>
                         <th>Photo</th>
                         <th>Action</th>
                     </tr>
@@ -262,7 +262,10 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                             <td><?= e($b['stylist_name']) ?></td>
                             <td><?= e($b['service_name']) ?></td>
                             <td><?= e($b['status']) ?></td>
-                            <td><?= $b['notes'] ? nl2br(e($b['notes'])) : '-' ?></td>
+                            <td>
+                                        <?php if (!empty($b['allergies'])): ?><span class="allergy-alert">Allergies: <?= e($b['allergies']) ?></span><?php endif; ?>
+                                        <?= $b['notes'] ? nl2br(e($b['notes'])) : (empty($b['allergies']) ? '-' : '') ?>
+                                    </td>
                             <td>
                                         <?php if (!empty($b['inspiration_image'])): ?>
                                             <a href="inspiration_image.php?booking_id=<?= (int) $b['booking_id'] ?>" target="_blank" rel="noopener">
@@ -271,7 +274,9 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                                         <?php else: ?>-<?php endif; ?>
                             </td>
                             <td>
+                                <a class="button" href="admin_booking.php?booking_id=<?= (int) $b['booking_id'] ?>">History</a>
                                 <?php if ($canCancel): ?>
+                                    <a class="button" href="admin_reschedule.php?booking_id=<?= (int) $b['booking_id'] ?>">Reschedule</a>
                                     <form method="post" action="admin_dashboard.php" class="inline-form"
                                           onsubmit="return confirm('Cancel this appointment and email the client?');">
                                         <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
@@ -282,8 +287,6 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                                         <input type="hidden" name="page" value="<?= (int) $page ?>">
                                         <button type="submit" class="button">Cancel</button>
                                     </form>
-                                <?php else: ?>
-                                    -
                                 <?php endif; ?>
                             </td>
                         </tr>

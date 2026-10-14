@@ -27,8 +27,8 @@ if (!$error && $service === null) {
 }
 
 // 2. Which stylist and which day did the client choose?
-$stylistChoice = (string) ($_GET['stylist_id'] ?? 'any');
-$dateInput     = (string) ($_GET['date'] ?? '');
+$stylistChoice = inputText($_GET, 'stylist_id', 'any');
+$dateInput     = inputText($_GET, 'date', '');
 $date          = null;
 $formMessage   = null;
 $slots         = [];
@@ -80,6 +80,19 @@ if (!$error) {
         }
     }
 }
+
+// 3. Smart scheduling (Phase 4, Section 4.6): the soonest free time, for the stylist chosen or for anyone.
+$suggestion    = null;
+$preferredName = null;
+if (!$error && isset($selected) && count($selected) > 0) {
+    try {
+        $preferred     = ($stylistChoice === 'any') ? null : $selected[0];
+        $preferredName = ($preferred !== null) ? $preferred['name'] : null;
+        $suggestion    = Booking::suggestSlot($stylists, $preferred, (int) $service['duration_minutes']);
+    } catch (PDOException $ex) {
+        error_log('Could not work out the soonest time: ' . $ex->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -114,6 +127,26 @@ if (!$error) {
                     &middot; R<?= number_format((float) $service['price'], 2) ?>
                 </p>
             </section>
+
+            <?php if (isset($selected) && count($selected) > 0): ?>
+                <section class="suggestion">
+                    <h3>Soonest available</h3>
+                    <?php if ($suggestion === null): ?>
+                        <p>There are no free times in the next 21 days<?= $preferredName !== null ? ' with ' . e($preferredName) . ' or any other stylist' : '' ?>. Please try again later or call the salon.</p>
+                    <?php else: ?>
+                        <?php if (!$suggestion['preferred']): ?>
+                            <p><?= e((string) $preferredName) ?> has no free times in the next 21 days. The soonest time with another stylist is:</p>
+                        <?php endif; ?>
+                        <p><strong><?= e($suggestion['start']->format('l, j F')) ?> at <?= e($suggestion['start']->format('H:i')) ?></strong>
+                            with <?= e($suggestion['stylist']['name']) ?></p>
+                        <a class="button" href="book_details.php?<?= e(http_build_query([
+                            'service_id' => $service['service_id'],
+                            'stylist_id' => $suggestion['stylist']['stylist_id'],
+                            'start'      => $suggestion['start']->format('Y-m-d H:i'),
+                        ])) ?>">Book this time</a>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
 
             <h2>Choose a stylist and a day</h2>
             <form method="get" action="book.php" class="booking-form">

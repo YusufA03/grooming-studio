@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         backToServices();
     }
 
-    $action    = (string) ($_POST['action'] ?? '');
+    $action    = inputText($_POST, 'action', '');
     $serviceId = filter_var($_POST['service_id'] ?? null, FILTER_VALIDATE_INT);
 
     try {

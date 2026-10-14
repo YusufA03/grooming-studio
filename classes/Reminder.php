@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/AuditLog.php';
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/Booking.php';
 require_once __DIR__ . '/Mailer.php';
@@ -81,6 +82,11 @@ class Reminder
 
             if ($sent) {
                 $result['sent']++;
+                try {
+                    AuditLog::record($db, (int) $row['booking_id'], 'reminder-sent', 'System', 'Reminder email sent to the client');
+                } catch (Throwable $logEx) {
+                    error_log('Could not write the reminder audit line: ' . $logEx->getMessage());
+                }
             } else {
                 // Hand the reminder back so the next run tries again.
                 $db->prepare('UPDATE Booking SET reminder_sent = FALSE WHERE booking_id = :id')

@@ -6,7 +6,7 @@ require_once __DIR__ . '/../classes/Mailer.php';
 
 // The token comes from the address (first visit) or from the form (when sent).
 $input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
-$token = (string) ($input['token'] ?? '');
+$token = inputText($input, 'token', '');
 
 $booking     = null;
 $stylist     = null;
@@ -51,14 +51,14 @@ if ($booking !== null && $error === null) {
 
 // ---- A new time was chosen ----
 if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $startText = (string) ($_POST['new_start'] ?? '');
+    $startText = inputText($_POST, 'new_start', '');
     $newStart  = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $startText);
 
     if ($newStart === false || $newStart->format('Y-m-d H:i') !== $startText) {
         $formMessage = 'That time is not valid. Please choose a time from the list.';
     } else {
         try {
-            $result = Booking::reschedule((int) $booking['booking_id'], $newStart, true);
+            $result = Booking::reschedule((int) $booking['booking_id'], $newStart, true, 'Client (private link)');
             if ($result === '') {
                 // Send the updated confirmation. If the email fails the new time still stands.
                 try {
@@ -83,7 +83,7 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---- Which day to show? (default: the booking's own day, or today if that has passed) ----
 $date = null;
 if ($error === null) {
-    $dateInput = (string) ($_GET['date'] ?? '');
+    $dateInput = inputText($_GET, 'date', '');
     $today     = new DateTimeImmutable('today');
     $dateProblem = null;
 

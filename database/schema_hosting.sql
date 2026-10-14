@@ -9,6 +9,8 @@
 -- then use the Import tab. This file does not create or switch databases.)
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS LoyaltyLedger;
+DROP TABLE IF EXISTS BookingLog;
 DROP TABLE IF EXISTS Booking;
 DROP TABLE IF EXISTS Client;
 DROP TABLE IF EXISTS Stylist;
@@ -61,13 +63,44 @@ CREATE TABLE Booking (
     status ENUM('confirmed','completed','no-show','cancelled')
         NOT NULL DEFAULT 'confirmed',
     notes TEXT,
+    allergies VARCHAR(500) NULL,
+    price_charged DECIMAL(8,2) NOT NULL DEFAULT 0,
     inspiration_image VARCHAR(255),
     reminder_sent BOOLEAN NOT NULL DEFAULT FALSE,
     manage_token CHAR(64) NOT NULL UNIQUE,
     CONSTRAINT fk_client FOREIGN KEY (client_id) REFERENCES Client(client_id),
     CONSTRAINT fk_stylist FOREIGN KEY (stylist_id) REFERENCES Stylist(stylist_id),
     CONSTRAINT fk_service FOREIGN KEY (service_id) REFERENCES Service(service_id),
-    CONSTRAINT chk_times CHECK (end_time > start_time)
+    CONSTRAINT chk_times CHECK (end_time > start_time),
+    CONSTRAINT chk_price CHECK (price_charged >= 0)
+);
+
+-- Audit trail: one row for every important thing that happens to a booking (who did it, and when).
+CREATE TABLE BookingLog (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id INT NOT NULL,
+    action ENUM('created','rescheduled','cancelled','completed','no-show','reminder-sent') NOT NULL,
+    actor VARCHAR(120) NOT NULL,
+    detail VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL,
+    INDEX idx_log_booking (booking_id, created_at),
+    CONSTRAINT fk_log_booking FOREIGN KEY (booking_id) REFERENCES Booking(booking_id)
+);
+
+-- Loyalty points: every earning, redemption and correction is a row, so a balance can always be explained.
+-- booking_id is set only for points earned from a booking and is UNIQUE, so one booking can earn points only once.
+CREATE TABLE LoyaltyLedger (
+    ledger_id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NOT NULL,
+    booking_id INT NULL UNIQUE,
+    points INT NOT NULL CHECK (points <> 0),
+    reason ENUM('earned','redeemed','adjustment') NOT NULL,
+    note VARCHAR(255) NULL,
+    actor VARCHAR(120) NOT NULL,
+    created_at DATETIME NOT NULL,
+    INDEX idx_ledger_client (client_id),
+    CONSTRAINT fk_ledger_client FOREIGN KEY (client_id) REFERENCES Client(client_id),
+    CONSTRAINT fk_ledger_booking FOREIGN KEY (booking_id) REFERENCES Booking(booking_id)
 );
 
 -- ---------------------------------------------------------------------

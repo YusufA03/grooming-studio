@@ -601,6 +601,44 @@ input[type="file"] { width: 100%; padding: 0.55rem; cursor: pointer; }
     border-radius: var(--radius-sm);
 }
 
+/* ---------- allergies, soonest-time suggestion, loyalty points and reports ---------- */
+.allergy-alert {
+    display: block;
+    margin: 0 0 0.4rem;
+    padding: 0.35rem 0.6rem;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--danger-soft);
+    border-left: 3px solid var(--danger);
+    border-radius: var(--radius-sm);
+}
+.suggestion {
+    margin: 0 0 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--accent-soft);
+    border: 0.05rem solid var(--accent);
+    border-left-width: 3px;
+    border-radius: var(--radius);
+}
+.suggestion h3 { margin: 0 0 0.4rem; }
+.suggestion p { margin: 0 0 0.6rem; }
+.loyalty-note {
+    margin-top: 0.9rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+}
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin: 0 0 1.5rem; }
+.kpi { padding: 0.9rem 1rem; background: var(--surface); border: 0.05rem solid var(--border); border-radius: var(--radius); }
+.kpi-value { display: block; font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+.kpi-label { display: block; color: var(--muted); font-size: 0.85rem; }
+.bar { display: block; height: 0.7rem; background: var(--accent-soft); border-radius: var(--radius-sm); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.bar-cell { min-width: 120px; }
+.chart-row { display: grid; grid-template-columns: 3.5rem 1fr 2.5rem; align-items: center; gap: 0.6rem; margin: 0 0 0.35rem; font-size: 0.9rem; }
+.report-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
+
 /* ---------- the light / dark switch (the button is added by assets/js/theme.js) ---------- */
 .theme-toggle {
     position: absolute;

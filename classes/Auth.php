@@ -149,6 +149,12 @@ class Auth
     }
 
     // Looks for an administrator, then a stylist, with this email.
+    // How a staff member is named in the audit trail, for example "Administrator: Boss Admin".
+    public static function actorLabel(array $user): string
+    {
+        return (($user['role'] ?? '') === 'admin' ? 'Administrator' : 'Stylist') . ': ' . (string) ($user['name'] ?? '?');
+    }
+
     private static function findAccount(string $email): ?array
     {
         $db = Database::getConnection();
