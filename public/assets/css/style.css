@@ -581,6 +581,26 @@ input[type="file"]::-webkit-file-upload-button {
     .service-grid .service-card, .team-card { animation: rise 0.45s ease both; }
 }
 
+/* ---------- inspiration photos ---------- */
+.field-hint { margin: 0.25rem 0 0.9rem; font-size: 0.85rem; color: var(--muted); }
+input[type="file"] { width: 100%; padding: 0.55rem; cursor: pointer; }
+.inspiration-thumb {
+    display: block;
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border: 0.05rem solid var(--field-border);
+    border-radius: var(--radius-sm);
+}
+.inspiration-preview {
+    display: block;
+    max-width: min(100%, 320px);
+    height: auto;
+    margin-top: 0.4rem;
+    border: 0.05rem solid var(--field-border);
+    border-radius: var(--radius-sm);
+}
+
 /* ---------- the light / dark switch (the button is added by assets/js/theme.js) ---------- */
 .theme-toggle {
     position: absolute;

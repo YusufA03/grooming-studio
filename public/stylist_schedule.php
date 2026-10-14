@@ -158,6 +158,7 @@ $now = new DateTimeImmutable('now');
                                 <th>Service</th>
                                 <th>Status</th>
                                 <th>Notes</th>
+                                <th>Photo</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -174,6 +175,13 @@ $now = new DateTimeImmutable('now');
                                     <td><?= e($b['service_name']) ?></td>
                                     <td><?= e($b['status']) ?></td>
                                     <td><?= $b['notes'] ? nl2br(e($b['notes'])) : '-' ?></td>
+                                    <td>
+                                        <?php if (!empty($b['inspiration_image'])): ?>
+                                            <a href="inspiration_image.php?booking_id=<?= (int) $b['booking_id'] ?>" target="_blank" rel="noopener">
+                                                <img class="inspiration-thumb" loading="lazy" src="inspiration_image.php?booking_id=<?= (int) $b['booking_id'] ?>" alt="Inspiration photo from <?= e($b['client_name']) ?>">
+                                            </a>
+                                        <?php else: ?>-<?php endif; ?>
+                                    </td>
                                     <td>
                                         <?php if ($b['status'] !== 'confirmed'): ?>
                                             -

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../classes/Service.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 require_once __DIR__ . '/../classes/Booking.php';
 require_once __DIR__ . '/../classes/Mailer.php';
+require_once __DIR__ . '/../classes/ImageUpload.php';
 
 // Values come from the address (first visit) or from the form (when sent).
 $input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
@@ -19,6 +20,9 @@ $error   = null;
 $errors  = [];   // problems with individual form fields
 $name = $email = $phone = $notes = '';
 
+// Did the whole form get thrown away because the photo was bigger than the server allows?
+$uploadTooBig = ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0);
+
 try {
     if ($serviceId !== false) {
         $service = Service::find($serviceId);
@@ -32,8 +36,10 @@ try {
     }
 
     if ($service === null || $stylist === null) {
-        http_response_code(404);
-        $error = 'We could not find that service or stylist. Please start again.';
+        http_response_code($uploadTooBig ? 413 : 404);
+        $error = $uploadTooBig
+            ? 'That photo was too big for the server. Please go back and choose a smaller one (up to 8 MB).'
+            : 'We could not find that service or stylist. Please start again.';
     } else {
         $parsed = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $startText);
         if ($parsed === false || $parsed->format('Y-m-d H:i') !== $startText) {
@@ -85,6 +91,19 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors['notes'] = 'Notes can be up to 1000 characters.';
     }
 
+    // The optional inspiration photo. A browser cannot keep a chosen file when a form
+    // comes back with a problem, so if there is a problem we ask for the photo again.
+    $imageName = null;
+    $hadPhoto  = isset($_FILES['inspiration']) && ($_FILES['inspiration']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+    if (count($errors) === 0) {
+        [$imageName, $imageProblem] = ImageUpload::saveInspirationFromUpload($_FILES['inspiration'] ?? []);
+        if ($imageProblem !== null) {
+            $errors['inspiration'] = $imageProblem;
+        }
+    } elseif ($hadPhoto) {
+        $errors['inspiration'] = 'Because of the problem above, please choose your photo again.';
+    }
+
     if (count($errors) === 0) {
         try {
             $token = Booking::create(
@@ -94,14 +113,16 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name,
                 $email,
                 $phone === '' ? null : $phone,
-                $notes === '' ? null : $notes
+                $notes === '' ? null : $notes,
+                $imageName
             );
 
             if ($token === null) {
+                ImageUpload::deleteInspiration($imageName);   // no booking, so no photo left lying around
                 http_response_code(409);
                 $error = 'Sorry, that time was just taken by someone else. Please choose another time.';
             } else {
-                                // Email the confirmation. If the email fails the booking is
+                // Email the confirmation. If the email fails the booking is
                 // still saved, so we only log the problem.
                 try {
                     $saved = Booking::findByToken($token);
@@ -116,6 +137,7 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
         } catch (Throwable $ex) {
+            ImageUpload::deleteInspiration($imageName);
             error_log('Could not save booking: ' . $ex->getMessage());
             $error = 'Sorry, we could not save your booking. Please try again.';
         }
@@ -152,7 +174,7 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
             </section>
 
             <h2>Your details</h2>
-            <form method="post" action="book_details.php" class="booking-form">
+            <form method="post" action="book_details.php" class="booking-form" enctype="multipart/form-data">
                 <input type="hidden" name="service_id" value="<?= (int) $service['service_id'] ?>">
                 <input type="hidden" name="stylist_id" value="<?= (int) $stylist['stylist_id'] ?>">
                 <input type="hidden" name="start" value="<?= e($start->format('Y-m-d H:i')) ?>">
@@ -174,8 +196,22 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                           placeholder="Allergies, the style you want, anything we should know"><?= e($notes) ?></textarea>
                 <?php if (isset($errors['notes'])): ?><p class="field-error"><?= e($errors['notes']) ?></p><?php endif; ?>
 
+                <label for="inspiration">Inspiration photo (optional)</label>
+                <input type="file" name="inspiration" id="inspiration" accept="image/jpeg,image/png,image/webp">
+                <p class="field-hint">A picture of the style you would like. JPG, PNG or WebP, up to 8 MB. Only your stylist and the salon can see it.</p>
+                <?php if (isset($errors['inspiration'])): ?><p class="field-error"><?= e($errors['inspiration']) ?></p><?php endif; ?>
+
                 <button type="submit" class="button">Confirm booking</button>
             </form>
+            <script>
+                document.getElementById('inspiration').addEventListener('change', function () {
+                    var file = this.files && this.files[0];
+                    if (file && file.size > 8 * 1024 * 1024) {
+                        alert('That photo is larger than 8 MB. Please choose a smaller one.');
+                        this.value = '';
+                    }
+                });
+            </script>
         <?php endif; ?>
     </main>
 </body>

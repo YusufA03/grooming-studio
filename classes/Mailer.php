@@ -14,6 +14,21 @@ class Mailer
     // Used by the test page so a problem can be shown in plain words.
     private static ?string $lastError = null;
 
+    // The conversation with the mail server, recorded only when the test page asks for it.
+    private static bool $debug = false;
+    private static string $debugLog = '';
+
+    public static function enableDebug(): void
+    {
+        self::$debug    = true;
+        self::$debugLog = '';
+    }
+
+    public static function debugLog(): string
+    {
+        return self::$debugLog;
+    }
+
     public static function lastError(): ?string
     {
         return self::$lastError;
@@ -227,6 +242,13 @@ class Mailer
             // the page.
             $mail->getSMTPInstance()->Timelimit = 10;
             $mail->CharSet = 'UTF-8';
+
+            if (self::$debug) {
+                $mail->SMTPDebug   = 2; // everything the server says
+                $mail->Debugoutput = function ($text, $level) {
+                    self::$debugLog .= trim((string) $text) . "\n";
+                };
+            }
 
             if ($config['username'] !== '') {
                 $mail->SMTPAuth = true;

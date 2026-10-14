@@ -74,6 +74,9 @@ $files = [
     'public/stylist_add_booking.php'  => 'add-booking v2',
     'public/stylist_schedule.php'     => 'stylist_add_booking.php',
     'public/assets/js/theme.js'       => 'egs-theme',
+    'public/inspiration_image.php'    => 'photoNotFound',
+    'tools/cleanup_images.php'        => 'Privacy housekeeping',
+    'tools/backup_db.php'             => 'Makes a backup copy',
     'tools/send_reminders.php'        => 'Reminder::sendDue',
     'tools/set_password.php'          => 'password_hash',
 ];

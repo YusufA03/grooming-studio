@@ -81,7 +81,8 @@ class Booking
         string $clientName,
         ?string $clientEmail,
         ?string $clientPhone,
-        ?string $notes
+        ?string $notes,
+        ?string $inspirationImage = null
     ): ?string {
         $db = Database::getConnection();
 
@@ -122,9 +123,9 @@ class Booking
 
             $insert = $db->prepare(
                 "INSERT INTO Booking
-                    (client_id, stylist_id, service_id, start_time, end_time, status, notes, manage_token)
+                    (client_id, stylist_id, service_id, start_time, end_time, status, notes, inspiration_image, manage_token)
                  VALUES
-                    (:client_id, :stylist_id, :service_id, :start_time, :end_time, 'confirmed', :notes, :token)"
+                    (:client_id, :stylist_id, :service_id, :start_time, :end_time, 'confirmed', :notes, :image, :token)"
             );
             $insert->execute([
                 ':client_id'  => $clientId,
@@ -133,6 +134,7 @@ class Booking
                 ':start_time' => $start->format('Y-m-d H:i:s'),
                 ':end_time'   => $end->format('Y-m-d H:i:s'),
                 ':notes'      => $notes,
+                ':image'      => $inspirationImage,
                 ':token'      => $token,
             ]);
 
@@ -152,7 +154,7 @@ class Booking
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            'SELECT b.booking_id, b.stylist_id, b.service_id, b.start_time, b.end_time, b.status, b.notes,
+            'SELECT b.booking_id, b.stylist_id, b.service_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
                     s.name AS service_name, s.price, s.duration_minutes,
                     st.name AS stylist_name,
                     c.name AS client_name, c.email AS client_email
@@ -173,7 +175,7 @@ class Booking
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
+            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
                     s.name AS service_name,
                     c.name AS client_name
              FROM Booking b
@@ -250,7 +252,7 @@ class Booking
     {
         [$where, $params] = self::buildFilter($filters);
 
-        $sql = 'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
+        $sql = 'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
                        s.name  AS service_name,
                        st.name AS stylist_name,
                        c.name  AS client_name,
@@ -289,7 +291,7 @@ class Booking
     public static function findDetails(int $bookingId): ?array
     {
         $stmt = Database::getConnection()->prepare(
-            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes,
+            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.notes, b.inspiration_image,
                     s.name AS service_name, s.price,
                     st.name AS stylist_name,
                     c.name AS client_name, c.email AS client_email
@@ -300,6 +302,29 @@ class Booking
              WHERE b.booking_id = :id'
         );
         $stmt->execute([':id' => $bookingId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
+
+    // For the photo page: who owns booking number $bookingId, and what is its photo?
+    // Returns null if there is no such booking.
+    public static function findInspiration(int $bookingId): ?array
+    {
+        $stmt = Database::getConnection()->prepare(
+            'SELECT booking_id, stylist_id, inspiration_image FROM Booking WHERE booking_id = :id'
+        );
+        $stmt->execute([':id' => $bookingId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
+
+    // The same, found through the client's secret link.
+    public static function findInspirationByToken(string $token): ?array
+    {
+        $stmt = Database::getConnection()->prepare(
+            'SELECT booking_id, stylist_id, inspiration_image FROM Booking WHERE manage_token = :token'
+        );
+        $stmt->execute([':token' => $token]);
         $row = $stmt->fetch();
         return $row === false ? null : $row;
     }

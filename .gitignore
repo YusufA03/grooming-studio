@@ -3,3 +3,8 @@ public/uploads/
 config/db_config.php
 config/mail_config.php
 config/cron_config.php
+# added by the update
+storage/inspiration/*
+!storage/inspiration/.htaccess
+backups/
+tools/backups/

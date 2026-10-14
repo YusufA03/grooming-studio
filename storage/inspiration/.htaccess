@@ -1,0 +1,9 @@
+# Nothing in this folder may ever be opened directly from the web.
+# (Photos are shown only through public/inspiration_image.php, which checks who is asking.)
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../classes/Service.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 require_once __DIR__ . '/../classes/Booking.php';
 require_once __DIR__ . '/../classes/Mailer.php';
+require_once __DIR__ . '/../classes/ImageUpload.php';
 
 // Any logged-in member of staff may open this page.
 //  - a STYLIST always adds to THEIR OWN diary: who they are comes from the
@@ -153,6 +154,18 @@ if ($error === null && $stylist !== null) {
             $errors['notes'] = 'Notes can be up to 1000 characters.';
         }
 
+        // The optional photo (for example one the client sent on WhatsApp).
+        $imageName = null;
+        $hadPhoto  = isset($_FILES['inspiration']) && ($_FILES['inspiration']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+        if (count($errors) === 0) {
+            [$imageName, $imageProblem] = ImageUpload::saveInspirationFromUpload($_FILES['inspiration'] ?? []);
+            if ($imageProblem !== null) {
+                $errors['inspiration'] = $imageProblem;
+            }
+        } elseif ($hadPhoto) {
+            $errors['inspiration'] = 'Because of the problem above, please choose the photo again.';
+        }
+
         if (count($errors) === 0) {
             try {
                 $token = Booking::create(
@@ -162,10 +175,12 @@ if ($error === null && $stylist !== null) {
                     $clientName,
                     $clientEmail === '' ? null : $clientEmail,
                     $clientPhone === '' ? null : $clientPhone,
-                    $notes === '' ? null : $notes
+                    $notes === '' ? null : $notes,
+                    $imageName
                 );
 
                 if ($token === null) {
+                    ImageUpload::deleteInspiration($imageName);
                     $notice = 'Sorry, that time was just taken. Please choose another time.';
                     $start  = null;
                 } else {
@@ -200,6 +215,7 @@ if ($error === null && $stylist !== null) {
                     exit;
                 }
             } catch (Throwable $ex) {
+                ImageUpload::deleteInspiration($imageName);
                 error_log('Could not add booking: ' . $ex->getMessage());
                 $errors['form'] = 'Sorry, we could not save the booking. Please try again.';
             }
@@ -323,7 +339,7 @@ $backLink     = $isAdmin ? ['admin_dashboard.php', 'Back to the bookings'] : ['s
 
                 <h2>Client details</h2>
                 <?php if (isset($errors['form'])): ?><p class="error"><?= e($errors['form']) ?></p><?php endif; ?>
-                <form method="post" action="stylist_add_booking.php" class="booking-form">
+                <form method="post" action="stylist_add_booking.php" class="booking-form" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
                     <?php if ($isAdmin): ?>
                         <input type="hidden" name="stylist_id" value="<?= (int) $stylist['stylist_id'] ?>">
@@ -349,6 +365,11 @@ $backLink     = $isAdmin ? ['admin_dashboard.php', 'Back to the bookings'] : ['s
                     <textarea name="notes" id="notes" maxlength="1000"
                               placeholder="Allergies, the style wanted, anything to remember"><?= e($notes) ?></textarea>
                     <?php if (isset($errors['notes'])): ?><p class="field-error"><?= e($errors['notes']) ?></p><?php endif; ?>
+
+                    <label for="inspiration">Inspiration photo (optional)</label>
+                    <input type="file" name="inspiration" id="inspiration" accept="image/jpeg,image/png,image/webp">
+                    <p class="field-hint">For example a photo the client sent you. JPG, PNG or WebP, up to 8 MB.</p>
+                    <?php if (isset($errors['inspiration'])): ?><p class="field-error"><?= e($errors['inspiration']) ?></p><?php endif; ?>
 
                     <button type="submit" class="button">Add booking</button>
                 </form>

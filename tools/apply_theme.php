@@ -40,6 +40,19 @@ function isValidPhp(string $code): bool
     return $status === 0;
 }
 
+// The file's path relative to the project folder, always with forward slashes. On Windows the
+// project folder is written with backslashes (C:\xampp\...) while glob() may return a mixture,
+// so both are made the same before the project folder is cut off.
+function shortPath(string $root, string $file): string
+{
+    $r = rtrim(str_replace('\\', '/', $root), '/');
+    $f = str_replace('\\', '/', $file);
+    if (stripos($f, $r . '/') === 0) {
+        return substr($f, strlen($r) + 1);
+    }
+    return ltrim($f, '/');
+}
+
 // The changes for an ordinary page. Returns [new text, list of what changed].
 function patchPage(string $src): array
 {
@@ -90,7 +103,7 @@ $failed    = 0;
 echo ($checkOnly ? "CHECK ONLY (nothing will be changed)\n" : "Applying the light/dark switch\n") . str_repeat('-', 40) . "\n";
 
 foreach ($targets as $file => $kind) {
-    $short = ltrim(str_replace($root, '', str_replace('\\', '/', $file)), '/');
+    $short = shortPath($root, $file);
     $src   = (string) file_get_contents($file);
 
     if ($kind === 'page' && strpos($src, 'assets/css/style.css') === false) {

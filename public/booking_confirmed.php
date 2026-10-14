@@ -77,6 +77,11 @@ if ($booking !== null) {
                 <?php if ($booking['notes']): ?>
                     <p><strong>Your notes:</strong><br><?= nl2br(e($booking['notes'])) ?></p>
                 <?php endif; ?>
+                <?php if (!empty($booking['inspiration_image'])): ?>
+                    <p><strong>Your inspiration photo:</strong><br>
+                        <img class="inspiration-preview" src="inspiration_image.php?token=<?= e($token) ?>" alt="The inspiration photo you sent">
+                    </p>
+                <?php endif; ?>
             </section>
 
             <?php if ($booking['status'] === 'confirmed'): ?>
