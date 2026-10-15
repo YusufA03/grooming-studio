@@ -1,367 +1,217 @@
-# Executive Grooming Studio — Booking & Scheduling System
+# Executive Grooming Studio
 
-A web-based booking and scheduling system for **Executive Grooming Studio**, a fictional
-hair salon created for academic purposes. The system replaces a paper appointment diary
-and telephone bookings with an online, duration-aware, double-booking-proof booking engine.
+An online booking system for a men's grooming salon, built in PHP and MySQL/MariaDB as the Year 3 IT group project at **Richfield Graduate Institute of Technology** (Durban).
 
 **Live site:** https://executivegroomingstudio.alwaysdata.net
+**Team:** Group 4 "Royal" · **Project due:** 9 November 2026
 
-> **Note:** The salon and all data in this repository are fictional. No real or personal
-> client data is used anywhere in this project.
-
----
-
-## 1. Module and assessment context
-
-| Item | Detail |
-|---|---|
-| Module | IT Project 2026 |
-| Institution | Richfield Graduate Institute of Technology |
-| Faculty | Faculty of Information Technology |
-| Qualification | Diploma: Information Technology |
-| Semester | 2 |
-| Group | Group 4 — "Royal" |
-
-### Assessment phases
-
-| Phase | Weight | Due date | Status |
-|---|---|---|---|
-| Project Proposal | 10% | 28 Aug 2026 | ✅ Submitted |
-| Planning Phase | 25% | 18 Sept 2026 | ✅ Submitted |
-| Analysis Phase | 20% | 9 Oct 2026 | ✅ Submitted (revised version) |
-| System Design Phase | 20% | 30 Oct 2026 | ✅ Written; being updated to match the final build |
-| Implementation Phase | 25% | 9 Nov 2026 | 🔜 Code complete and deployed; test evidence and report being finalised |
-
-<!-- TODO: adjust the Status column to match what has actually been submitted and marked. -->
+Clients book online in under a minute, without needing an account. Stylists see their day and week, with allergy notes and inspiration photos, and can cancel, move or complete their own appointments. Administrators run the whole salon from one dashboard: bookings, services, stylists and their hours, other administrators, loyalty points and a suite of printable reports.
 
 ---
 
-## 2. Team roster
+## Team
 
-| Member | Student number | Role |
-|---|---|---|
-| Yusuf Ally | _TODO_ | Project Manager — oversees progress, schedules meetings, ensures deadlines are met, communicates with the supervisor |
-| Lufuno Ramarumo | _TODO_ | Business Analyst — gathers requirements, documents user stories, ensures the solution meets business needs |
-| Bhoavik Iswarlall | _TODO_ | Developer — implements core features, writes code, collaborates on technical tasks |
-| Taahir Inder | _TODO_ | Systems/Solutions Architect — designs the system architecture and database schema, and ensures integration between components |
-| Calvin Van Niekerk | _TODO_ | Tester (QA) — develops and executes test plans, documents bugs, verifies the system meets its requirements |
+| Name | Student number | Main contribution |
+|------|----------------|-------------------|
+| Yusuf Ally | _add number_ | _add_ |
+| _Member 2_ | _add number_ | _add_ |
+| _Member 3_ | _add number_ | _add_ |
+| _Member 4_ | _add number_ | _add_ |
+| _Member 5_ | _add number_ | _add_ |
 
-Roles as stated in the submitted proposal.
+## Project status
 
-<!-- TODO: add the five student numbers. -->
-
----
-
-## 3. What the system does
-
-Three user roles, each with a distinct set of capabilities:
-
-| Role | Capabilities |
-|---|---|
-| **Client** (no account needed) | Browse services (description, duration, price, picture); see the **soonest available time**; choose a stylist or *any available stylist*; see real-time free times; book at any hour; add **allergies**, notes and an **inspiration photo**; receive a confirmation email and a reminder; reschedule or cancel through a private link until 2 hours before the appointment; see their **loyalty points** |
-| **Stylist** | Log in; see **own** schedule by day or week with allergies highlighted, notes and photos; mark appointments **completed** or **no-show**; add bookings taken by phone |
-| **Administrator** | Manage services (with pictures), stylists, working hours and passwords; search and filter every booking; cancel or reschedule any booking on a client's behalf; see the **history of every booking** (who did what, and when); manage **loyalty points**; run **reports** (busy periods, popular services, stylist performance) with a spreadsheet (CSV) download |
-
-### The core engine
-
-Availability is **duration-aware**. The system does not divide the day into fixed-length
-slots. A candidate appointment is offered only if:
-
-1. it fits entirely within the stylist's working hours for that date,
-2. it starts in the future, and
-3. it overlaps **no** existing non-cancelled booking for that stylist.
-
-Overlap is tested as a real time-interval comparison:
-
-```
-new_start < existing_end  AND  new_end > existing_start
-```
-
-Booking is enforced inside a **database transaction that locks the stylist's row**
-(`SELECT ... FOR UPDATE`) and re-checks the time before saving, so two people confirming
-the same time at the same instant cannot both succeed. The automated tests prove this by
-starting several separate PHP processes at once (see §9).
-
-### Features
-
-1. **Inspiration photo upload** — JPG, PNG or WebP up to 8 MB. Photos are stored outside the public folder, judged by their real content, re-saved clean (location data removed), shown only to the booked stylist, the administrator and the client, and deleted 30 days after the appointment.
-2. **Allergy and sensitivity notes** — a dedicated field, shown in a highlighted box on the stylist's schedule and repeated in the client's emails.
-3. **Duration-aware scheduling** — the engine described above.
-4. **Smart scheduling** — suggests the soonest free time with the chosen stylist, or the soonest time with another stylist if theirs is full for 21 days.
-5. **Automated reminder email** — sent about one hour before the appointment by a scheduled task, and safe to run repeatedly: a reminder is never sent twice.
-6. **Loyalty points** — 1 point for every R10 of a *completed* appointment; 100 points can be exchanged in the salon for R50 off. Every earning and redemption is a line in a ledger, and one booking can earn points only once.
-7. **Reports** — busy days and hours, popular services, stylist performance and revenue for any period, plus a CSV download.
-8. **Audit trail** — every booking records when it was made, moved, cancelled, marked or reminded, and by whom.
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 1 | Project proposal | Done |
+| 2 | Requirements and analysis | Done |
+| 3 | System design (13 functional requirements) | Done |
+| 4 | Detailed design | Done |
+| 5 | Implementation, testing and evaluation | Code complete and deployed; test evidence and final report in progress |
 
 ---
 
-## 4. Out of scope
+## What it does
 
-These are **deliberately excluded**, as named in the submitted proposal:
+### For clients (no account needed)
+- Choose a service, a stylist and a day, and see only the times that really fit. Availability comes from the service length, the stylist's working blocks and existing bookings, and is checked again inside a locked database transaction so two people can never take the same time.
+- Add **allergy notes**, general notes and an optional **inspiration photo** (checked, resized and stored privately, never publicly browsable).
+- Receive a confirmation email and a reminder shortly before the appointment.
+- Use a private link in the email to **reschedule or cancel** up to 2 hours before the appointment.
+- Optionally **create an account** with an emailed one-time link (no password to invent at the counter) to see upcoming and past appointments and loyalty points, with their details pre-filled next time. Old guest bookings made with the same email appear automatically.
 
-- ❌ Payment or deposit processing (loyalty rewards are recorded, not applied to a payment)
-- ❌ Native mobile application (the system is responsive **web only**)
-- ❌ SMS or WhatsApp notifications
-- ❌ Any real or personal client data
+### For stylists
+- Log in to a **day or week schedule** with allergy notes highlighted and photos one click away.
+- On their **own** bookings: **History**, **Reschedule**, **Cancel** (the client is emailed) and **Completed** (the client earns loyalty points). **No-show** is available once the appointment has started. Completed can be recorded early, after a "not started yet, are you sure?" prompt, and the history notes it.
+- Add phone and walk-in bookings.
+
+### For administrators
+- **Bookings dashboard** with filters (date, stylist, status, client search) and the same four actions on any booking.
+- **Add booking** on behalf of a client.
+- **Services**: names, descriptions, durations, prices and pictures.
+- **Stylists**: tick the services each stylist performs, set working hours as **blocks** (a lunch break is simply two blocks), and press **Stop taking bookings** / **Start taking bookings**. If a change would leave upcoming bookings outside the new hours or services, a warning lists them. Bookings are never changed automatically.
+- **Admins**: grant or take away administrator access from the website. Access removed takes effect immediately, not at the end of the session.
+- **Loyalty**: balances and history per client, with redemptions and corrections recorded in a ledger. Rewards are recorded in the system; they are not applied to payment.
+- **Reports** (each prints on A4 and downloads as CSV): Bookings register, Takings (daily and by service), Stylist activity (rostered hours and utilisation), Cancellations and no-shows (notice given), Customer history (one client's bookings and points ledger), and a busy-periods overview. **Allergy notes never appear in any report or CSV.**
+- **Booking history**: an audit trail of who booked, moved, cancelled or completed each booking, and when.
+
+### Everywhere
+- Light and dark theme switch, responsive layout, accessible forms and clear error messages.
 
 ---
 
-## 5. Technology stack
+## Technology
 
-| Layer | Technology |
-|---|---|
-| Frontend | HTML, CSS, JavaScript — responsive, with a light/dark theme switch; no framework |
-| Backend | PHP 8.2 or later (8.4 on the live site) |
-| Database | MySQL / MariaDB (MariaDB 11.8 live) |
-| Email | PHPMailer over Gmail SMTP (port 587, TLS, app password) |
-| Hosting | Alwaysdata free plan |
-| Version control | Git / GitHub |
+| Layer | Choice |
+|-------|--------|
+| Language | PHP 8 (plain PHP, no framework), object-oriented classes |
+| Database | MySQL / MariaDB via PDO and prepared statements (10 tables) |
+| Email | PHPMailer over SMTP (Gmail in production, Mailpit locally) |
+| Front end | Server-rendered HTML, one stylesheet, one small script (theme switch) |
+| Hosting | Alwaysdata (free tier), with scheduled tasks for reminders, backups and photo clean-up |
+| Local development | XAMPP on Windows |
 
-**No application framework.** Plain PHP, structured as classes: PDO with prepared statements
-throughout, output always escaped, and configuration kept out of version control.
+**Size:** 63 PHP files and about 10,400 lines of PHP: 14 classes, 31 public pages, 9 command-line tools.
 
----
-
-## 6. Repository layout
+### Structure
 
 ```
 grooming-studio/
-├── public/               ← the web root (the ONLY publicly reachable folder)
-│   ├── *.php             ← the pages (booking, schedules, administrator pages)
-│   └── assets/           ← css and js
-├── classes/              ← application logic (not web-reachable)
-│   ├── Booking.php       ← availability, suggestions, create, move, cancel, outcomes
-│   ├── Loyalty.php       ← points: earning, rewards, corrections
-│   ├── Report.php        ← the administrator's reports
-│   ├── AuditLog.php      ← booking history
-│   ├── Auth.php  Client.php  Database.php  ImageUpload.php
-│   └── Mailer.php  Reminder.php  Service.php  Stylist.php
-├── config/               ← settings. The *.example.php files are tracked;
-│                           db_config.php, mail_config.php and cron_config.php are git-ignored
-├── database/             ← schema.sql (new local database), schema_hosting.sql (live),
-│                           migration_2026_10_15.sql (updates an existing database)
-├── storage/inspiration/  ← private inspiration photos (git-ignored, web access denied)
-├── backups/              ← daily database backups (git-ignored, web access denied)
-├── tools/                ← command-line tools (see §8)
-├── test-results/         ← reports written by the test runner (git-ignored)
-├── vendor/               ← PHPMailer, installed by Composer (git-ignored)
-└── MANIFEST.json         ← SHA-256 fingerprints used by tools/verify_files.php
+├── classes/      Business logic: Booking, Stylist, Client, Account, AdminAccess, Loyalty,
+│                 AuditLog, Auth, Mailer, Reminder, Report, Service, ImageUpload, Database
+├── config/       Helpers, shared page parts, timezone, and *.example.php settings templates
+├── public/       The only folder the web server exposes: pages, CSS, JavaScript
+├── storage/      Private inspiration photos (closed to the web)
+├── tools/        Command-line tools (see below)
+├── database/     schema.sql, schema_hosting.sql and the migration files
+└── MANIFEST.json File fingerprints used by the installation checker
 ```
 
-Everything except `public/` sits **above** the web root, so source code, settings, photos
-and backups cannot be requested over HTTP even if the PHP handler fails.
+### Database (10 tables)
+`Administrator` · `AccountToken` · `Booking` · `BookingLog` · `Client` · `LoyaltyLedger` · `Service` · `Stylist` · `StylistService` · `WorkingBlock`
+
+### Security measures
+- Prepared statements everywhere; all output HTML-escaped.
+- Passwords hashed with `password_hash`; no passwords are stored in the code or the repository.
+- CSRF token on every form that changes data.
+- Role checks on every protected page, and a stylist can only ever reach their own bookings. Someone else's booking looks exactly like "not found".
+- Private photos are served through a script that checks who is asking; the folder itself is closed to the web.
+- Settings files (`db_config.php`, `mail_config.php`, `cron_config.php`) are git-ignored and never uploaded by the update packages.
 
 ---
 
-## 7. Setup instructions (local, Windows with XAMPP)
+## Getting started (local, Windows + XAMPP)
 
-### 7.1 Prerequisites
-
-- XAMPP with **PHP 8.2 or later** (extensions `pdo_mysql`, `mbstring`, `fileinfo`, `gd`, `openssl`, `zlib`)
-- MySQL / MariaDB (started from the XAMPP control panel)
-- Composer and Git
-- [Mailpit](https://github.com/axllent/mailpit) (a free local test mailbox) for the email features
-
-### 7.2 Clone and install
-
-```bash
-cd C:\xampp\htdocs
-git clone https://github.com/YusufA03/grooming-studio.git
-cd grooming-studio
-composer install          # installs PHPMailer into vendor/
+**1. Get the code and the mail library**
+```
+git clone https://github.com/YusufA03/grooming-studio.git C:\xampp\htdocs\grooming-studio
+cd C:\xampp\htdocs\grooming-studio
+composer install
 ```
 
-### 7.3 Create the database
+**2. Create the database**
+In phpMyAdmin create an empty database called `grooming_studio` (collation `utf8mb4_unicode_ci`), click it, and **Import** `database/schema.sql`. The file only creates tables; it never drops anything.
 
-> ⚠️ `database/schema.sql` is for a **new, empty** database. It only creates tables, and it
-> **refuses to run on a database that already has tables** (it never deletes anything).
-> To bring an **existing** database up to date, import `database/migration_2026_10_15.sql`
-> instead. It is safe to run twice and keeps all your data.
+**3. Create your settings files**
+Copy each `config/*.example.php` to the same name without `.example` and fill them in. For local email testing use **Mailpit** and set the mail settings to host `127.0.0.1`, port `1025`, no username, no password, no encryption, and `site_url` `http://localhost/grooming-studio/public`.
 
-In phpMyAdmin (`http://localhost/phpmyadmin`): choose **Import** and select
-`database/schema.sql`. It creates the database `grooming_studio`, seven tables and the
-sample data (five services, three stylists).
-
-### 7.4 Configure
-
-Copy each example file in `config/` to the same name without `.example`:
-
-| Copy | To | What to set |
-|---|---|---|
-| `db_config.example.php` | `db_config.php` | The defaults suit XAMPP (`localhost`, `grooming_studio`, `root`, empty password) |
-| `mail_config.example.php` | `mail_config.php` | The defaults send to Mailpit; nothing to change locally |
-| `cron_config.example.php` | `cron_config.php` | Replace the placeholder with a long random key |
-
-**These three files are git-ignored and must never be committed.** The `.example.php`
-files are published, so they must contain placeholders only.
-
-### 7.5 Create the accounts
-
-```bash
+**4. Create the first accounts**
+```
 C:\xampp\php\php.exe tools\set_password.php
 ```
+It asks whether the account is an administrator or a stylist, then the details and a password.
 
-The tool asks whether the account is an administrator or a stylist, then the email, the
-name (administrators) and the password twice (at least 10 characters). It stores only a
-`password_hash()` hash. **There are no default passwords in this repository.**
-
-### 7.6 Check the installation and open the site
-
-```bash
+**5. Check the installation, then open the site**
+```
 C:\xampp\php\php.exe tools\check_install.php
 ```
+Then browse to `http://localhost/grooming-studio/public/`.
 
-Then open `http://localhost/grooming-studio/public/`. Start Mailpit and open
-`http://localhost:8025` to read every email the system sends.
+**Mailpit (optional, for testing emails):** download `mailpit-windows-amd64.zip` from the Mailpit releases page, extract `mailpit.exe`, run it, allow it through the firewall, and open `http://localhost:8025` to see every email the site sends.
 
 ---
 
-## 8. Command-line tools
+## Command-line tools
 
 | Tool | What it does |
-|---|---|
-| `tools/set_password.php` | Creates or resets an administrator or stylist account |
-| `tools/check_install.php` | Checks PHP, extensions, files, database tables and settings |
-| `tools/verify_files.php` | Compares every file with `MANIFEST.json` to prove nothing is old or altered |
-| `tools/send_reminders.php` | Sends the reminder emails that are due (run by a scheduled task) |
-| `tools/backup_db.php` | Saves a compressed database backup (keeps 7 days, never fewer than 3) |
-| `tools/cleanup_images.php` | Deletes photos of appointments older than 30 days (`--dry-run` to preview) |
-| `tools/apply_theme.php` | Adds the light/dark switch to the pages |
-| `tools/run_tests.php` | The automated test runner (see §9) |
+|------|--------------|
+| `tools/set_password.php` | Create or reset an administrator or stylist login |
+| `tools/check_install.php` | Checks files, settings, database and folders; prints what to fix |
+| `tools/verify_files.php` | Confirms every file matches `MANIFEST.json` |
+| `tools/send_reminders.php` | Sends due reminder emails (run every 5 minutes) |
+| `tools/backup_db.php` | Full consistent backup to `backups/*.sql.gz` (run daily) |
+| `tools/cleanup_images.php` | Removes photos that no booking uses (run daily) |
+| `tools/run_tests.php` | The automated test runner (see Testing) |
+| `tools/reset_test_data.php` | Clears clients and bookings for a fresh round of testing (see below) |
+| `tools/apply_theme.php` | Developer helper for the stylesheet |
 
-All tools refuse to run from a web browser.
+### Clearing test data
+```
+php tools/reset_test_data.php --dry-run     # only shows what would be deleted
+php tools/reset_test_data.php               # backs up first, then asks you to type the database name
+php tools/reset_test_data.php --keep-clients
+```
+It deletes bookings, booking history, loyalty points, waiting password links, private photos and clients, and restarts booking numbers at 1. It **keeps** services, stylists (with their services and hours) and administrators, including any client account that is also an administrator. If the backup fails, nothing is deleted. It is command-line only.
 
 ---
 
-## 9. Running the tests
+## Testing
 
-```bash
+The automated runner builds its **own temporary database and web server**, so your real data is never touched, and cleans up after itself even if it crashes.
+
+```
 C:\xampp\php\php.exe tools\run_tests.php
 ```
 
-Start MySQL first, and Mailpit as well if you want the email tests to run.
-
-The runner builds **its own test database** (`grooming_studio_test`) and its **own temporary
-web server**, runs about 80 checks mapped to the test-case numbers in the Phase 5 report
-(TC-B01, TC-S04 and so on), saves a report in `test-results\` (`.html` and `.csv`), and then
-removes everything it created. Your real database is never touched, it only runs against a
-database on the same computer, and test emails go to Mailpit only.
-
-It covers **77 of the 82** documented test cases. Five cannot be checked by a program and
-are done by hand: TC-B11, TC-E04, TC-O04, TC-N01 and TC-N04, together with the live-site
-checks (HTTPS cookies, real email delivery, load times) and the browser and usability tests.
-
-People confirming the same time at the same instant are simulated with several **separate
-PHP processes** started together, so the booking lock is tested for real.
+- **112 checks covering 109 of the 114 documented test cases.** On the finished project: 112 passed, 0 failed, 0 skipped (with Mailpit running; the email checks are skipped without it).
+- Results are saved as `test-results\results-DATE.html` and `.csv`.
+- The runner is itself tested: deliberately breaking features in a copy is caught every time.
+- **Still done by hand** (5 test cases): TC-B11, TC-E04, TC-O04, TC-N01, TC-N04, plus live-site checks (HTTPS cookies, real email delivery, load times) and the browser and usability tests.
 
 ---
 
-## 10. Deployment (Alwaysdata)
+## Deployment (Alwaysdata)
 
-| Item | Detail |
-|---|---|
-| URL | https://executivegroomingstudio.alwaysdata.net |
-| Web root | The project's `public/` folder |
-| PHP | 8.4 |
-| Database | MariaDB, created from `database/schema_hosting.sql` (it does not create or switch databases) |
-| Email | Gmail SMTP with an app password, set in `config/mail_config.php` on the server |
+The live site is updated with a package that contains **only safe files** (no settings, no photos, no backups). Order matters:
 
-Summary of a live installation:
+1. **Back up** the live database (`php tools/backup_db.php`) and download a copy of the current live files.
+2. **Import the migration first.** `database/migration_2026_10_15.sql` then `database/migration_2026_10_16.sql` (each is safe to repeat and deletes nothing).
+3. **Upload the files straight away** (the old code cannot read the new database).
+4. Check the site, then delete any temporary diagnostic pages (`server_check.php`, `email_test.php`) from the server.
 
-1. Create the site (type PHP), pointing its root at `public/`.
-2. Create a database and a user, then import `database/schema_hosting.sql` into it.
-3. Upload `classes`, `config`, `public`, `storage`, `tools` and `vendor` by SFTP. **Never upload your local settings files.**
-4. Create `config/db_config.php`, `config/mail_config.php` and `config/cron_config.php` on the server.
-5. Create the administrator with `php tools/set_password.php` over SSH.
-6. Create the scheduled tasks below.
-7. Open `server_check.php` with its key and confirm every section is OK. Then **delete** `server_check.php`, `email_test.php` and `cron_reminders.php` from the live site.
-
-### Scheduled tasks
+**Scheduled tasks** (Alwaysdata → Advanced → Scheduled tasks):
 
 | Task | Command | When |
-|---|---|---|
-| Reminder emails | `php /home/ACCOUNT/tools/send_reminders.php` | Every 5 minutes |
-| Database backup | `php /home/ACCOUNT/tools/backup_db.php` | Daily at 02:00 |
-| Photo clean-up | `php /home/ACCOUNT/tools/cleanup_images.php` | Daily |
+|------|---------|------|
+| Reminders | `php /home/executivegroomingstudio/tools/send_reminders.php` | every 5 minutes |
+| Backup | `php /home/executivegroomingstudio/tools/backup_db.php` | daily at 02:00 |
+| Photo clean-up | `php /home/executivegroomingstudio/tools/cleanup_images.php` | daily |
 
-The reminder task is idempotent: extra runs send nothing twice.
-
-### Updating an existing database
-
-Run **only** `database/migration_2026_10_15.sql` on a database that already has data. Run it
-on the live database **before** uploading new code, or the booking pages will fail until it
-is done. `check_install.php` and `server_check.php` name the file if it has not been run.
-
-### Backups and restore
-
-`tools/backup_db.php` writes `backups/grooming-studio-DATE-TIME.sql.gz`. To restore, open
-phpMyAdmin, click the database, choose **Import** and select that file. Download the
-backups folder now and then so a copy exists outside the hosting account.
+Restoring a backup: phpMyAdmin → your database → **Import** → the `.sql.gz` file.
 
 ---
 
-## 11. Implementation status
+## Known limitations
 
-| Area | Status |
-|---|---|
-| Database — 7 tables with foreign keys, CHECK constraints and indexes | ✅ Built and verified |
-| Duration-aware availability engine | ✅ Built and tested |
-| Double-booking prevention (transaction and row lock) | ✅ Built; tested with simultaneous processes |
-| Client booking journey (no account) | ✅ Built |
-| Smart scheduling (soonest time suggestion) | ✅ Built |
-| Allergy notes, inspiration photo upload | ✅ Built; hostile files tested |
-| Confirmation, change and cancellation emails; reminder task | ✅ Built; reminder tested for no duplicates |
-| Client reschedule and cancel by private link (2-hour cut-off) | ✅ Built |
-| Stylist schedule, outcomes, phone bookings | ✅ Built |
-| Administrator: services, stylists, hours, bookings, reschedule, cancel | ✅ Built |
-| Loyalty points and redemption | ✅ Built; double-spend tested |
-| Reports and CSV download | ✅ Built; checked against known data |
-| Audit trail (booking history) | ✅ Built |
-| Role-based access, CSRF protection, escaped output | ✅ Built; tested |
-| Database backups, photo clean-up, file integrity check | ✅ Built; backup restore tested |
-| Light and dark themes | ✅ Built |
-| Automated test runner | ✅ Built; 77 of 82 test cases |
-
-### Known limitations
-
-- **Emails may reach the spam folder at first.** They are sent from a free Gmail account with no sending history, with links to a free hosting address. A custom domain with SPF, DKIM and DMARC records through a transactional email service is the lasting fix.
-- **No password reset or change by the user.** The administrator sets stylist passwords, and the administrator's own password is set with `tools/set_password.php`. There is no lockout after repeated failed logins and no two-factor login.
-- **Free hosting** limits storage and usage.
-- **Loyalty rewards are recorded in the system and given in the salon**; there is no online payment.
-- The audit trail starts when it was introduced, so older bookings show no history.
-- The test runner has been run on Windows with XAMPP; it is not tested on other systems.
+- Emails can land in spam (free Gmail sending from a free hosting domain).
+- Loyalty rewards are recorded in the system but not applied to payment.
+- The audit trail starts from when it was introduced; older bookings show no history.
+- A booking marked Completed or No-show cannot be undone from the site.
+- There is no self-service password reset for staff (an administrator sets it) and no login lockout or two-factor sign-in.
+- The test runner is verified on Windows (XAMPP) and Linux; other systems are untested.
 
 ---
 
-## 12. Security measures
+## Contributing
 
-- Passwords stored only as `password_hash()` (bcrypt) hashes; a generic message for a wrong password or an unknown email.
-- PDO prepared statements everywhere; all output escaped.
-- A security token on every staff form; sessions with `HttpOnly`, `SameSite=Lax` and `Secure` cookies, and a 30-minute idle timeout.
-- Role checks on every staff page; a stylist sees only their own bookings and photos.
-- Client links hold 64 random characters and stop changing a booking 2 hours before it starts.
-- Uploaded photos judged by content, size-limited, re-saved clean and stored outside the web root.
-- Settings, photos and backups kept outside the public folder and out of Git.
-- CSV downloads defuse text that a spreadsheet could run as a formula.
+- Work on a branch, keep commits small, and describe *what changed and why*.
+- Never commit `config/db_config.php`, `config/mail_config.php`, `config/cron_config.php`, `backups/`, `test-results/`, `vendor/` or uploaded photos. Before committing, run:
+  ```
+  git diff --cached --name-only | Select-String "db_config|mail_config|cron_config|backups|test-results|vendor"
+  ```
+  It must print nothing.
+- Run `tools\run_tests.php` before pushing and keep it green.
 
----
+## Licence and academic note
 
-## 13. Documentation
-
-The assessed project documents (Phases 1 to 5) are kept in the `docs/` folder.
-
-<!-- TODO: add the Phase 1–5 files to docs/ and link them here, for example:
-- [Phase 3: Analysis](docs/phase-3-analysis.pdf)
--->
-
----
-
-## 14. Contributing conventions
-
-- `main` must always be in a working, demonstrable state.
-- Commit in logical units with descriptive messages in the imperative mood ("Add loyalty ledger", not "added stuff").
-- **Never commit** `config/db_config.php`, `config/mail_config.php`, `config/cron_config.php`, `vendor/`, `backups/`, `test-results/` or any photo under `storage/`.
-- Check before every push: `git status`, then confirm no settings file or password is staged.
-- All SQL uses prepared statements; all output goes through the `e()` helper.
-- Run `tools/run_tests.php` before pushing a change to the booking or security code.
-- **Database safety:** use `database/migration_*.sql` on a database that has data. Take a backup first with `tools/backup_db.php`.
+Coursework for Richfield Graduate Institute of Technology. Not licensed for commercial use.
