@@ -12,6 +12,12 @@ class Database
         if (self::$connection === null) {
             $config = require __DIR__ . '/../config/db_config.php';
 
+            // Only the automated test runner (tools/run_tests.php) sets these two variables, so that it
+            // can use a separate test database. On the real site they do not exist and nothing changes.
+            if (getenv('GS_TEST_MODE') === '1' && getenv('GS_DB_NAME') !== false && getenv('GS_DB_NAME') !== '') {
+                $config['dbname'] = (string) getenv('GS_DB_NAME');
+            }
+
             $dsn = "mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}";
 
             self::$connection = new PDO($dsn, $config['user'], $config['pass'], [

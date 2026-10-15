@@ -20,11 +20,23 @@ class Booking
     // current slot (otherwise it would clash with itself).
     public static function getAvailableSlots(array $stylist, int $durationMinutes, DateTimeImmutable $date, ?int $ignoreBookingId = null): array
     {
-        $window = Stylist::getWorkingWindow($stylist['working_hours'], $date);
-        if ($window === null) {
+        $stylistId = (int) $stylist['stylist_id'];
+
+        // A stylist who has stopped taking bookings has no free times (bookings already made stay as they are).
+        $accepting = array_key_exists('accepting_bookings', $stylist)
+            ? ((int) $stylist['accepting_bookings'] === 1)
+            : Stylist::isAccepting($stylistId);
+        if (!$accepting) {
+            return [];
+        }
+
+        // Working hours are BLOCKS (for example 09:00-13:00 and 14:00-17:00, so the lunch hour is not bookable).
+        $blocks = Stylist::blocksOn($stylistId, $date);
+        if (count($blocks) === 0) {
             return []; // stylist does not work on this day
         }
-        [$open, $close] = $window;
+        $firstOpen = $blocks[0][0];
+        $lastClose = $blocks[count($blocks) - 1][1];
 
         // Load this stylist's existing bookings that touch this working day.
         $db   = Database::getConnection();
@@ -35,9 +47,9 @@ class Booking
                      AND start_time < :close
                      AND end_time > :open";
         $params = [
-            ':stylist_id' => $stylist['stylist_id'],
-            ':open'       => $open->format('Y-m-d H:i:s'),
-            ':close'      => $close->format('Y-m-d H:i:s'),
+            ':stylist_id' => $stylistId,
+            ':open'       => $firstOpen->format('Y-m-d H:i:s'),
+            ':close'      => $lastClose->format('Y-m-d H:i:s'),
         ];
         if ($ignoreBookingId !== null) {
             $sql .= ' AND booking_id <> :ignore_id';
@@ -52,19 +64,22 @@ class Booking
         $step     = new DateInterval('PT' . self::SLOT_STEP_MINUTES . 'M');
         $slots    = [];
 
-        for ($start = $open; ; $start = $start->add($step)) {
-            $end = $start->add($duration);
+        // An appointment must finish before its block ends, so it can never run into a break.
+        foreach ($blocks as [$open, $close]) {
+            for ($start = $open; ; $start = $start->add($step)) {
+                $end = $start->add($duration);
 
-            if ($end > $close) {
-                break; // would finish after closing time
+                if ($end > $close) {
+                    break; // would finish after this block ends
+                }
+                if ($start <= $now) {
+                    continue; // already in the past
+                }
+                if (self::overlapsAny($start, $end, $booked)) {
+                    continue; // clashes with an existing booking
+                }
+                $slots[] = $start;
             }
-            if ($start <= $now) {
-                continue; // already in the past
-            }
-            if (self::overlapsAny($start, $end, $booked)) {
-                continue; // clashes with an existing booking
-            }
-            $slots[] = $start;
         }
 
         return $slots;
@@ -97,11 +112,20 @@ class Booking
         try {
             // 1. Lock this stylist (and read their current working hours).
             $lock = $db->prepare(
-                'SELECT stylist_id, working_hours FROM Stylist WHERE stylist_id = :id FOR UPDATE'
+                'SELECT stylist_id, accepting_bookings FROM Stylist WHERE stylist_id = :id FOR UPDATE'
             );
             $lock->execute([':id' => $stylist['stylist_id']]);
             $current = $lock->fetch();
             if ($current === false) {
+                $db->rollBack();
+                return null;
+            }
+
+            // The stylist must perform this service. This is checked again here, inside the transaction, so an edited
+            // address cannot book a stylist for something they do not do.
+            $skill = $db->prepare('SELECT COUNT(*) FROM StylistService WHERE stylist_id = :st AND service_id = :sv');
+            $skill->execute([':st' => $stylist['stylist_id'], ':sv' => $service['service_id']]);
+            if ((int) $skill->fetchColumn() === 0) {
                 $db->rollBack();
                 return null;
             }
@@ -215,7 +239,8 @@ class Booking
     //  - it must still be 'confirmed' (completed / no-show are final)
     //  - it must have already started
     // Returns '' when it worked, otherwise a message explaining why not.
-    public static function recordOutcome(int $bookingId, int $stylistId, string $outcome, string $actor = 'Stylist'): string
+    // $stylistId limits it to that stylist's own bookings (a stylist); null means any booking (an administrator).
+    public static function recordOutcome(int $bookingId, ?int $stylistId, string $outcome, string $actor = 'Stylist'): string
     {
         if (!in_array($outcome, ['completed', 'no-show'], true)) {
             return 'That is not a valid choice.';
@@ -227,23 +252,26 @@ class Booking
         // The new status, its audit line and any loyalty points are saved together, or not at all.
         $db->beginTransaction();
         try {
-            $update = $db->prepare(
-                "UPDATE Booking
-                 SET status = :outcome
-                 WHERE booking_id = :id
-                   AND stylist_id = :stylist_id
-                   AND status = 'confirmed'
-                   AND start_time <= :now"
-            );
-            $update->execute([
-                ':outcome'    => $outcome,
-                ':id'         => $bookingId,
-                ':stylist_id' => $stylistId,
-                ':now'        => $now,
-            ]);
+            // Completed can be recorded at any time (the staff page asks "not started yet, are you sure?" first, and the
+            // history notes it). A NO-SHOW only makes sense once the appointment has started.
+            $sql    = "UPDATE Booking SET status = :outcome WHERE booking_id = :id AND status = 'confirmed'"
+                    . ($outcome === 'no-show' ? ' AND start_time <= :now' : '')
+                    . ($stylistId === null ? '' : ' AND stylist_id = :stylist_id');
+            $params = [':outcome' => $outcome, ':id' => $bookingId];
+            if ($outcome === 'no-show') {
+                $params[':now'] = $now;
+            }
+            if ($stylistId !== null) {
+                $params[':stylist_id'] = $stylistId;
+            }
+            $update = $db->prepare($sql);
+            $update->execute($params);
 
             if ($update->rowCount() === 1) {
-                AuditLog::record($db, $bookingId, $outcome, $actor, null);
+                $when  = $db->prepare('SELECT start_time FROM Booking WHERE booking_id = :id');
+                $when->execute([':id' => $bookingId]);
+                $early = ($outcome === 'completed' && new DateTimeImmutable((string) $when->fetchColumn()) > new DateTimeImmutable($now));
+                AuditLog::record($db, $bookingId, $outcome, $actor, $early ? 'Marked completed before the appointment started' : null);
                 if ($outcome === 'completed') {
                     Loyalty::awardForBooking($db, $bookingId);
                 }
@@ -259,8 +287,8 @@ class Booking
         }
 
         // It did not change anything, so find out why (still only this stylist's own booking).
-        $check = $db->prepare('SELECT status FROM Booking WHERE booking_id = :id AND stylist_id = :stylist_id');
-        $check->execute([':id' => $bookingId, ':stylist_id' => $stylistId]);
+        $check = $db->prepare('SELECT status FROM Booking WHERE booking_id = :id' . ($stylistId === null ? '' : ' AND stylist_id = :stylist_id'));
+        $check->execute($stylistId === null ? [':id' => $bookingId] : [':id' => $bookingId, ':stylist_id' => $stylistId]);
         $status = $check->fetchColumn();
 
         if ($status === false) {
@@ -269,7 +297,7 @@ class Booking
         if ($status !== 'confirmed') {
             return 'That appointment has already been marked as ' . $status . '.';
         }
-        return 'You can only mark an appointment after it has started.';
+        return 'A no-show can only be recorded after the appointment has started.';
     }
 
     // Finds bookings for the administrator's dashboard, earliest first.
@@ -364,7 +392,8 @@ class Booking
     // the availability check ignores cancelled bookings.
     // Rules: it must still be 'confirmed' and must not have started yet.
     // Returns '' when it worked, otherwise a message explaining why not.
-    public static function cancel(int $bookingId, string $actor = 'System'): string
+    // $onlyStylistId limits it to that stylist's own bookings (a stylist cancelling); null means any booking.
+    public static function cancel(int $bookingId, string $actor = 'System', ?int $onlyStylistId = null): string
     {
         $db  = Database::getConnection();
         $now = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
@@ -372,9 +401,14 @@ class Booking
         // The cancellation and its audit line are saved together, or not at all.
         $db->beginTransaction();
         try {
-            $before = $db->prepare('SELECT start_time FROM Booking WHERE booking_id = :id');
+            $before = $db->prepare('SELECT start_time, stylist_id FROM Booking WHERE booking_id = :id');
             $before->execute([':id' => $bookingId]);
-            $wasAt = $before->fetchColumn();
+            $row   = $before->fetch();
+            $wasAt = $row === false ? false : $row['start_time'];
+            if ($onlyStylistId !== null && ($row === false || (int) $row['stylist_id'] !== $onlyStylistId)) {
+                $db->rollBack();
+                return 'We could not find that appointment.';   // not this stylist's booking: the same answer as "no such booking"
+            }
 
             $update = $db->prepare(
                 "UPDATE Booking
@@ -488,7 +522,7 @@ class Booking
 
         try {
             // Lock the stylist, exactly as a new booking does.
-            $lock = $db->prepare('SELECT stylist_id, working_hours FROM Stylist WHERE stylist_id = :id FOR UPDATE');
+            $lock = $db->prepare('SELECT stylist_id, accepting_bookings FROM Stylist WHERE stylist_id = :id FOR UPDATE');
             $lock->execute([':id' => $stylistId]);
             $stylist = $lock->fetch();
             if ($stylist === false) {
@@ -498,7 +532,7 @@ class Booking
 
             // Read the booking again, now that nobody else can change this stylist's diary.
             $read = $db->prepare(
-                'SELECT b.booking_id, b.start_time, b.status, s.duration_minutes
+                'SELECT b.booking_id, b.service_id, b.start_time, b.status, s.duration_minutes
                  FROM Booking b
                  JOIN Service s ON s.service_id = b.service_id
                  WHERE b.booking_id = :id
@@ -530,6 +564,17 @@ class Booking
             if ($newStart == $currentStart) {
                 $db->rollBack();
                 return 'That is already the time of this appointment.';
+            }
+
+            if ((int) $stylist['accepting_bookings'] !== 1) {
+                $db->rollBack();
+                return 'This stylist is not taking bookings at the moment, so the appointment cannot be moved to a new time.';
+            }
+            $skill = $db->prepare('SELECT COUNT(*) FROM StylistService WHERE stylist_id = :st AND service_id = :sv');
+            $skill->execute([':st' => $stylistId, ':sv' => $booking['service_id']]);
+            if ((int) $skill->fetchColumn() === 0) {
+                $db->rollBack();
+                return 'This stylist no longer performs that service, so the appointment cannot be moved to a new time.';
             }
 
             // Is the new time free? (the booking's own current slot does not count against it)
@@ -610,6 +655,23 @@ class Booking
     }
 
     // Two appointments overlap when each one starts before the other ends.
+    // A signed-in client's own appointments, newest first (for the "My appointments" page).
+    public static function forClient(int $clientId): array
+    {
+        $stmt = Database::getConnection()->prepare(
+            'SELECT b.booking_id, b.start_time, b.end_time, b.status, b.price_charged, b.manage_token,
+                    s.name AS service_name, st.name AS stylist_name
+             FROM Booking b
+             JOIN Service s  ON s.service_id  = b.service_id
+             JOIN Stylist st ON st.stylist_id = b.stylist_id
+             WHERE b.client_id = :id
+             ORDER BY b.start_time DESC
+             LIMIT 200'
+        );
+        $stmt->execute([':id' => $clientId]);
+        return $stmt->fetchAll();
+    }
+
     // Smart scheduling (Phase 4, Section 4.6): the SOONEST free time for a service.
     // $preferred is the stylist the client chose, or null for "any available stylist".
     // The preferred stylist's soonest time wins. If that stylist has nothing free within

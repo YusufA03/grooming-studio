@@ -8,6 +8,7 @@ function adminNav(string $current): string
         'services'   => ['admin_services.php',      'Services'],
         'stylists'   => ['admin_stylists.php',      'Stylists'],
         'reports'    => ['admin_reports.php',       'Reports'],
+        'admins'     => ['admin_admins.php',        'Admins'],
         'loyalty'    => ['admin_loyalty.php',       'Loyalty'],
     ];
 

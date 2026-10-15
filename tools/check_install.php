@@ -55,13 +55,13 @@ $files = [
     'classes/Mailer.php'              => 'this client has no email address',
     'classes/Reminder.php'            => 'c.email IS NOT NULL',
     'classes/Service.php'             => 'function imageUrl',
-    'classes/Stylist.php'             => 'function countUpcomingOutsideHours',
+    'classes/Stylist.php'             => 'function strandedBookings',
     'config/admin_nav.php'            => "'addbooking'",
     'config/helpers.php'              => 'timezone.php',
     'config/timezone.php'             => 'Africa/Johannesburg',
     'public/admin_dashboard.php'      => '(no email)',
     'public/admin_services.php'       => 'multipart/form-data',
-    'public/admin_stylists.php'       => 'hours_off',
+    'public/admin_stylists.php'       => 'save_services',
     'public/book.php'                 => 'service-image',
     'public/book_details.php'         => 'Mailer::sendBookingConfirmation',
     'public/booking_confirmed.php'    => 'cancel_booking.php',
@@ -77,7 +77,22 @@ $files = [
     'public/inspiration_image.php'    => 'photoNotFound',
     'tools/cleanup_images.php'        => 'Privacy housekeeping',
     'tools/backup_db.php'             => 'Makes a backup copy',
+    'tools/run_tests.php'             => 'AUTOMATED TEST RUNNER',
     'classes/AuditLog.php'            => 'The audit trail',
+    'classes/Account.php'             => 'OPTIONAL client accounts',
+    'config/booking_actions.php'      => 'What staff do to a booking',
+    'config/report_helpers.php'       => 'Shared pieces of the five management reports',
+    'public/admin_report_register.php'      => 'REPORT 1: Bookings register',
+    'public/admin_report_takings.php'       => 'REPORT 2: Takings',
+    'public/admin_report_stylists.php'      => 'REPORT 3: Stylist activity',
+    'public/admin_report_cancellations.php' => 'REPORT 4: Cancellations and no-shows',
+    'public/admin_report_customer.php'      => 'REPORT 5: Customer history',
+    'public/admin_report_overview.php'      => 'Busy periods and popular services',
+    'classes/AdminAccess.php'         => 'giving or taking away admin access',
+    'public/register.php'             => 'Create an account - Executive Grooming Studio',
+    'public/set_password.php'         => 'Choose your password - Executive Grooming Studio',
+    'public/my_appointments.php'      => 'My appointments - Executive Grooming Studio',
+    'public/admin_admins.php'         => 'Administrators - Executive Grooming Studio',
     'classes/Loyalty.php'             => 'Loyalty points (Phase 1',
     'classes/Report.php'              => 'administrator\'s reports',
     'public/admin_reports.php'        => 'Reports - Executive Grooming Studio',
@@ -195,11 +210,11 @@ if ($db !== null) {
         $r = $q->fetch();
         return $r === false ? null : $r;
     };
-    foreach (['Client', 'Stylist', 'Service', 'Booking', 'Administrator', 'BookingLog', 'LoyaltyLedger'] as $table) {
+    foreach (['Client', 'Stylist', 'Service', 'Booking', 'Administrator', 'BookingLog', 'LoyaltyLedger', 'AccountToken', 'StylistService', 'WorkingBlock'] as $table) {
         $q = $db->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :t');
         $q->execute([':t' => $table]);
         $has = (int) $q->fetchColumn() > 0;
-        line($has ? 'OK' : 'FIX', "table $table", $has ? '' : (in_array($table, ['BookingLog', 'LoyaltyLedger'], true) ? 'run database/migration_2026_10_15.sql in phpMyAdmin (Import tab). It is safe to run twice and deletes nothing.' : 'missing: import database/schema.sql'));
+        line($has ? 'OK' : 'FIX', "table $table", $has ? '' : (in_array($table, ['BookingLog', 'LoyaltyLedger', 'AccountToken', 'StylistService', 'WorkingBlock'], true) ? 'run database/migration_2026_10_15.sql and migration_2026_10_16.sql in phpMyAdmin (Import tab). It is safe to run twice and deletes nothing.' : 'missing: import database/schema.sql'));
         if (!$has) { $fixes[] = "missing table $table"; }
     }
     $r = $col('Service', 'image');
@@ -209,10 +224,10 @@ if ($db !== null) {
     $ok = $r && $r['is_nullable'] === 'YES';
     line($ok ? 'OK' : 'FIX', 'Client.email may be empty (for phone bookings)', $ok ? '' : 'run in phpMyAdmin:  ALTER TABLE Client MODIFY email VARCHAR(150) NULL;');
     if (!$ok) { $fixes[] = 'database: let Client.email be empty'; }
-    foreach (['Booking' => ['manage_token', 'reminder_sent', 'allergies', 'price_charged'], 'Stylist' => ['email', 'password_hash']] as $table => $cols) {
+    foreach (['Booking' => ['manage_token', 'reminder_sent', 'allergies', 'price_charged'], 'Stylist' => ['email', 'password_hash', 'accepting_bookings']] as $table => $cols) {
         foreach ($cols as $c) {
             $r = $col($table, $c);
-            line($r ? 'OK' : 'FIX', "$table.$c", $r ? '' : 'missing: your database is older than the project. run database/migration_2026_10_15.sql in phpMyAdmin (Import tab). It is safe to run twice and deletes nothing.');
+            line($r ? 'OK' : 'FIX', "$table.$c", $r ? '' : 'missing: your database is older than the project. run database/migration_2026_10_15.sql and migration_2026_10_16.sql in phpMyAdmin (Import tab). It is safe to run twice and deletes nothing.');
             if (!$r) { $fixes[] = "database: $table.$c missing"; }
         }
     }

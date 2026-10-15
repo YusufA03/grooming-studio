@@ -42,6 +42,10 @@ class ImageUpload
     // public/inspiration_image.php, which checks who is asking.
     public static function inspirationDirectory(): string
     {
+        // Only the automated test runner sets these variables (a temporary folder for test photos).
+        if (getenv('GS_TEST_MODE') === '1' && getenv('GS_STORAGE_DIR') !== false && getenv('GS_STORAGE_DIR') !== '') {
+            return rtrim((string) getenv('GS_STORAGE_DIR'), '/\\');
+        }
         return __DIR__ . '/../storage/inspiration';
     }
 

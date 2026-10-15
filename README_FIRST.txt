@@ -17,13 +17,19 @@ STEP 1 - UPDATE THE FILES (on your computer), ONE COMMAND
       C:\xampp\php\php.exe install_update.php "C:\xampp\htdocs\grooming-studio"             (does it)
 
 STEP 2 - UPDATE THE DATABASE (ONCE; this is NEW and REQUIRED)
+ IMPORTANT: use ONLY migration_2026_10_15.sql on a database that already has data. schema.sql is for a brand-new,
+ empty database; since this version it refuses to run on a database that already has tables (it never deletes anything).
  This version adds two tables and two columns. Without this step, booking will fail.
  In phpMyAdmin: click your database (grooming_studio) > Import > choose
       database\migration_2026_10_15.sql   (it is inside the update, and now also in your project's database folder)
  It is SAFE TO RUN MORE THAN ONCE and it deletes nothing. Existing completed appointments earn their points.
  (A brand-new installation does not need this: schema.sql already includes it.)
 
-STEP 3 - CHECK
+STEP 3 - CHECK, AND RUN THE AUTOMATED TESTS (NEW)
+      C:\xampp\php\php.exe tools\run_tests.php
+      Start XAMPP MySQL first (and Mailpit, for the email tests). It builds its OWN test database and web server,
+      runs about 80 checks mapped to your Phase 5 test-case numbers, and saves a report in test-results\ (open the
+      .html file and screenshot it). Your real database is never touched. If Windows asks about php.exe, click Allow.
       C:\xampp\php\php.exe tools\verify_files.php
       C:\xampp\php\php.exe tools\check_install.php
 

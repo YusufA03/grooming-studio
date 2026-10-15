@@ -128,6 +128,37 @@ class Mailer
             'Your appointment has been cancelled - Executive Grooming Studio', $html, $text);
     }
 
+    // The public address of the site (from mail_config.php), or null when email is not set up.
+    public static function siteUrl(): ?string
+    {
+        $config = self::loadConfig();
+        return $config === null ? null : rtrim((string) $config['site_url'], '/');
+    }
+
+    // Emails the one-time link that lets a person choose a password (new account, forgotten password, new administrator).
+    public static function sendAccountLink(string $toEmail, string $name, string $secret, int $hours, bool $existingAccount): bool
+    {
+        $config = self::loadConfig();
+        if ($config === null) {
+            return false;
+        }
+        $link = rtrim($config['site_url'], '/') . '/set_password.php?token=' . $secret;
+
+        [$html, $text] = self::buildMessage(
+            $existingAccount ? 'Reset your password' : 'Choose your password',
+            $name,
+            $existingAccount
+                ? 'Someone asked to reset the password of your Executive Grooming Studio account. If it was you, use the link below. If it was not you, ignore this email: nothing changes.'
+                : 'Use the link below to choose your password for your Executive Grooming Studio account. If you did not ask for this, you can ignore this email.',
+            ['This link' => 'works once and expires in ' . $hours . ' hours'],
+            $existingAccount ? 'Choose a new password' : 'Choose my password',
+            $link
+        );
+
+        return self::send($config, $toEmail, $name,
+            ($existingAccount ? 'Reset your password' : 'Choose your password') . ' - Executive Grooming Studio', $html, $text);
+    }
+
     // Emails the client a reminder that their appointment is coming up.
     public static function sendBookingReminder(array $booking, string $token): bool
     {
@@ -228,7 +259,19 @@ class Mailer
         }
         require_once $autoloadFile;
 
-        return require $configFile;
+        $config = require $configFile;
+
+        // The automated test runner sets this flag. Then every email goes to the local test mailbox
+        // (Mailpit) and never to a real address. On the real site the flag does not exist.
+        if (getenv('GS_TEST_MODE') === '1') {
+            $config['host']       = '127.0.0.1';
+            $config['port']       = 1025;
+            $config['username']   = '';
+            $config['password']   = '';
+            $config['encryption'] = '';
+        }
+
+        return $config;
     }
 
     // Hands one email to the mail server.

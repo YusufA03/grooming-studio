@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/Booking.php';
+require_once __DIR__ . '/../config/booking_actions.php';
 
 // Only a logged-in stylist may open this page. The stylist is taken from the
 // login session, never from the address, so nobody can look at another
@@ -30,28 +31,29 @@ function scheduleUrl(string $view, DateTimeImmutable $date): string
     return 'stylist_schedule.php?' . http_build_query(['view' => $view, 'date' => $date->format('Y-m-d')]);
 }
 
-// ---- A Completed / No-show button was pressed ----
+// ---- A Cancel, Completed or No-show button was pressed ----
+// A stylist can only ever act on their OWN bookings: the stylist id comes from the login, never from the form.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!Auth::csrfValid($_POST['csrf_token'] ?? null)) {
         $_SESSION['flash'] = ['error', 'Your session expired. Please try again.'];
     } else {
         $bookingId = filter_var($_POST['booking_id'] ?? null, FILTER_VALIDATE_INT);
-        $outcome   = inputText($_POST, 'outcome', '');
 
         if ($bookingId === false) {
             $_SESSION['flash'] = ['error', 'We could not find that appointment.'];
         } else {
             try {
-                $problem = Booking::recordOutcome($bookingId, $stylistId, $outcome, Auth::actorLabel($user));
-                if ($problem === '') {
-                    $earned = ($outcome === 'completed') ? Loyalty::earnedForBooking($bookingId) : 0;
-                    $_SESSION['flash'] = ['success', 'The appointment was marked as ' . $outcome . '.'
-                        . ($earned > 0 ? ' The client earned ' . $earned . ' loyalty points.' : '')];
+                $action = inputText($_POST, 'action', '');
+                if ($action === 'cancel') {
+                    [$ok, $message] = staffCancel($bookingId, $user, $stylistId);
+                } elseif ($action === '' || $action === 'outcome') {   // no "action" is the original Completed / No-show buttons
+                    [$ok, $message] = staffOutcome($bookingId, $user, inputText($_POST, 'outcome', ''), $stylistId);
                 } else {
-                    $_SESSION['flash'] = ['error', $problem];
+                    [$ok, $message] = [false, 'That is not something this page can do.'];   // an unknown action does nothing
                 }
+                $_SESSION['flash'] = [$ok ? 'success' : 'error', $message];
             } catch (PDOException $ex) {
-                error_log('Could not record outcome: ' . $ex->getMessage());
+                error_log('Could not update the appointment: ' . $ex->getMessage());
                 $_SESSION['flash'] = ['error', 'Sorry, something went wrong on our side. Please try again.'];
             }
         }
@@ -189,23 +191,35 @@ $now = new DateTimeImmutable('now');
                                             </a>
                                         <?php else: ?>-<?php endif; ?>
                                     </td>
-                                    <td>
-                                        <?php if ($b['status'] !== 'confirmed'): ?>
-                                            -
-                                        <?php elseif (!$started): ?>
-                                            Not started yet
-                                        <?php else: ?>
-                                            <?php foreach (['completed' => 'Completed', 'no-show' => 'No-show'] as $value => $label): ?>
-                                                <form method="post" action="stylist_schedule.php" class="inline-form">
+                                    <td class="actions-cell">
+                                        <?php $completedConfirm = $started ? '' : " onsubmit=\"return confirm('This appointment has not started yet. Mark it as completed anyway?');\""; ?>
+                                        <div class="row-actions">
+                                            <a class="button" href="admin_booking.php?booking_id=<?= (int) $b['booking_id'] ?>">History</a>
+                                            <?php if ($b['status'] === 'confirmed' && !$started): ?>
+                                                <a class="button" href="admin_reschedule.php?booking_id=<?= (int) $b['booking_id'] ?>">Reschedule</a>
+                                                <form method="post" action="stylist_schedule.php"
+                                                      onsubmit="return confirm('Cancel this appointment and email the client?');">
                                                     <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
                                                     <input type="hidden" name="booking_id" value="<?= (int) $b['booking_id'] ?>">
-                                                    <input type="hidden" name="outcome" value="<?= e($value) ?>">
+                                                    <input type="hidden" name="action" value="cancel">
                                                     <input type="hidden" name="view" value="<?= e($view) ?>">
                                                     <input type="hidden" name="date" value="<?= e($date->format('Y-m-d')) ?>">
-                                                    <button type="submit" class="button"><?= e($label) ?></button>
+                                                    <button type="submit" class="button danger">Cancel</button>
                                                 </form>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
+                                            <?php endif; ?>
+                                            <?php if ($b['status'] === 'confirmed'): ?>
+                                                <?php foreach (($started ? ['completed' => 'Completed', 'no-show' => 'No-show'] : ['completed' => 'Completed']) as $value => $label): ?>
+                                                    <form method="post" action="stylist_schedule.php"<?= $value === 'completed' ? $completedConfirm : '' ?>>
+                                                        <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
+                                                        <input type="hidden" name="booking_id" value="<?= (int) $b['booking_id'] ?>">
+                                                        <input type="hidden" name="outcome" value="<?= e($value) ?>">
+                                                        <input type="hidden" name="view" value="<?= e($view) ?>">
+                                                        <input type="hidden" name="date" value="<?= e($date->format('Y-m-d')) ?>">
+                                                        <button type="submit" class="button<?= $value === 'no-show' ? ' danger' : '' ?>"><?= e($label) ?></button>
+                                                    </form>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

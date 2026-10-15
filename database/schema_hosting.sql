@@ -1,29 +1,25 @@
 -- =====================================================================
--- Executive Grooming Studio - database setup
+-- Executive Grooming Studio - database setup (SAFE VERSION, 15 October 2026)
 -- Implements the schema from Phase 4, Section 4.5, plus sample data.
--- HOSTING VERSION: import this file in phpMyAdmin (Import tab) AFTER selecting your database. It is safe to re-import:
--- it drops and recreates the tables each time (this DELETES any data).
+--
+-- THIS FILE ONLY CREATES. IT NEVER DELETES ANYTHING.
+--   * A NEW, EMPTY database  ->  import this file (click YOUR database in phpMyAdmin first, then Import).
+--   * A database that ALREADY HAS tables  ->  the import stops with an error and changes
+--     nothing. To bring an existing database up to date, import
+--     migration_2026_10_15.sql instead (it keeps all your data).
 -- =====================================================================
 
 -- (For hosting: the database already exists. In phpMyAdmin, click YOUR database first,
 -- then use the Import tab. This file does not create or switch databases.)
-
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS LoyaltyLedger;
-DROP TABLE IF EXISTS BookingLog;
-DROP TABLE IF EXISTS Booking;
-DROP TABLE IF EXISTS Client;
-DROP TABLE IF EXISTS Stylist;
-DROP TABLE IF EXISTS Service;
-DROP TABLE IF EXISTS Administrator;
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- email is optional: a client who phones the salon may not have one.
 CREATE TABLE Client (
     client_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NULL,
-    phone VARCHAR(20)
+    phone VARCHAR(20),
+    -- Set only when the client has made an account (optional). Guests never have one.
+    password_hash VARCHAR(255) NULL
 );
 
 -- NOTE: email and password_hash are included here so stylists can log in
@@ -33,8 +29,11 @@ CREATE TABLE Stylist (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    specialty VARCHAR(100),
-    working_hours VARCHAR(255) NOT NULL
+    -- 0 = not offered for new bookings (bookings already made stay as they are)
+    accepting_bookings TINYINT(1) NOT NULL DEFAULT 1,
+    -- Legacy: the old hours text. No longer used by the website (hours are WorkingBlock rows). Kept so that
+    -- migration_2026_10_16.sql can run on any database without an error.
+    working_hours VARCHAR(255) NULL
 );
 
 CREATE TABLE Service (
@@ -46,11 +45,53 @@ CREATE TABLE Service (
     image VARCHAR(255) NULL   -- file name of the service's picture (kept in public/uploads/services)
 );
 
+-- Which services each stylist performs. A stylist is offered for a service only if it is ticked here.
+CREATE TABLE StylistService (
+    stylist_id INT NOT NULL,
+    service_id INT NOT NULL,
+    PRIMARY KEY (stylist_id, service_id),
+    CONSTRAINT fk_ss_stylist FOREIGN KEY (stylist_id) REFERENCES Stylist(stylist_id) ON DELETE CASCADE,
+    CONSTRAINT fk_ss_service FOREIGN KEY (service_id) REFERENCES Service(service_id)
+);
+
+-- A stylist's working hours as BLOCKS: any number per day, so a lunch break is just two blocks.
+-- weekday is 1 = Monday ... 7 = Sunday. An appointment must fit entirely inside ONE block.
+CREATE TABLE WorkingBlock (
+    block_id INT AUTO_INCREMENT PRIMARY KEY,
+    stylist_id INT NOT NULL,
+    weekday TINYINT NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    CONSTRAINT chk_block_day CHECK (weekday BETWEEN 1 AND 7),
+    CONSTRAINT chk_block_times CHECK (end_time > start_time),
+    INDEX idx_block_stylist (stylist_id, weekday),
+    CONSTRAINT fk_block_stylist FOREIGN KEY (stylist_id) REFERENCES Stylist(stylist_id) ON DELETE CASCADE
+);
+
+
 CREATE TABLE Administrator (
     admin_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL
+    -- An administrator either has a password of their own (made with tools/set_password.php), or is a
+    -- CLIENT account that was given admin access from the website (client_id), and signs in with that password.
+    password_hash VARCHAR(255) NULL,
+    client_id INT NULL UNIQUE,
+    CONSTRAINT chk_admin_login CHECK (password_hash IS NOT NULL OR client_id IS NOT NULL),
+    CONSTRAINT fk_admin_client FOREIGN KEY (client_id) REFERENCES Client(client_id)
+);
+
+-- One-time links by email: they let a person choose a password (new account, forgotten password,
+-- or a new administrator). Only the SHA-256 of the link's secret is stored.
+CREATE TABLE AccountToken (
+    token_id INT AUTO_INCREMENT PRIMARY KEY,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    email VARCHAR(150) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    created_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    INDEX idx_token_email (email, created_at)
 );
 
 CREATE TABLE Booking (
@@ -106,7 +147,6 @@ CREATE TABLE LoyaltyLedger (
 -- ---------------------------------------------------------------------
 -- Sample data (fictional). Stylist passwords are placeholders; real
 -- passwords are set later with PHP's password_hash().
--- working_hours format used by the app: 'Mon-Fri 09:00-17:00'
 -- ---------------------------------------------------------------------
 INSERT INTO Service (name, description, duration_minutes, price) VALUES
 ('Men''s Haircut', 'Classic cut with wash and style.', 30, 150.00),
@@ -115,7 +155,20 @@ INSERT INTO Service (name, description, duration_minutes, price) VALUES
 ('Deep Conditioning Treatment', 'Restorative treatment for dry or damaged hair.', 45, 350.00),
 ('Executive Grooming Package', 'Haircut, beard trim and conditioning treatment.', 90, 550.00);
 
-INSERT INTO Stylist (name, email, password_hash, specialty, working_hours) VALUES
-('Thandi Mokoena', 'thandi@executivegrooming.test', 'SET_LATER', 'Colour', 'Mon-Fri 09:00-17:00'),
-('Rohan Naidoo', 'rohan@executivegrooming.test', 'SET_LATER', 'Cuts and beards', 'Mon-Fri 09:00-17:00'),
-('Sipho Dlamini', 'sipho@executivegrooming.test', 'SET_LATER', 'Treatments', 'Tue-Sat 10:00-18:00');
+INSERT INTO Stylist (name, email, password_hash) VALUES
+('Thandi Mokoena', 'thandi@executivegrooming.test', 'SET_LATER'),
+('Rohan Naidoo', 'rohan@executivegrooming.test', 'SET_LATER'),
+('Sipho Dlamini', 'sipho@executivegrooming.test', 'SET_LATER');
+
+-- In the sample data every stylist performs every service.
+INSERT INTO StylistService (stylist_id, service_id) SELECT st.stylist_id, sv.service_id FROM Stylist st CROSS JOIN Service sv;
+
+-- Thandi and Rohan: Monday to Friday 09:00-17:00. Sipho: Tuesday to Saturday 10:00-18:00.
+INSERT INTO WorkingBlock (stylist_id, weekday, start_time, end_time)
+SELECT st.stylist_id, d.n, '09:00:00', '17:00:00'
+FROM Stylist st JOIN (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) d
+WHERE st.email IN ('thandi@executivegrooming.test', 'rohan@executivegrooming.test');
+INSERT INTO WorkingBlock (stylist_id, weekday, start_time, end_time)
+SELECT st.stylist_id, d.n, '10:00:00', '18:00:00'
+FROM Stylist st JOIN (SELECT 2 AS n UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) d
+WHERE st.email = 'sipho@executivegrooming.test';

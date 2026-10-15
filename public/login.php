@@ -2,12 +2,6 @@
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../classes/Auth.php';
 
-// Where each type of staff member lands after logging in.
-function homePageFor(string $role): string
-{
-    return ($role === 'admin') ? 'admin_dashboard.php' : 'stylist_schedule.php';
-}
-
 // Already logged in? Go straight to your own page.
 $user = Auth::user();
 if ($user !== null) {
@@ -46,14 +40,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Staff Login - Executive Grooming Studio</title>
+    <title>Log in - Executive Grooming Studio</title>
     <link rel="stylesheet" href="assets/css/style.css?v=<?= (int) @filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <script src="assets/js/theme.js?v=<?= (int) @filemtime(__DIR__ . '/assets/js/theme.js') ?>"></script>
 </head>
 <body>
     <header class="site-header">
         <h1>Executive Grooming Studio</h1>
-        <p>Staff login</p>
+        <p>Log in</p>
     </header>
 
     <main class="container">
@@ -65,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if ($error): ?>
             <p class="error"><?= e($error) ?></p>
         <?php endif; ?>
+        <p>Staff and clients with an account log in here. A client account is optional: you can book without one.</p>
 
         <form method="post" action="login.php" class="booking-form">
             <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
@@ -79,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <button type="submit" class="button">Log in</button>
         </form>
+        <p><a href="register.php">Create a client account or reset a forgotten password</a></p>
     </main>
 </body>
 </html>

@@ -1,10 +1,12 @@
 <?php
 require_once __DIR__ . '/../config/helpers.php';
+require_once __DIR__ . '/../config/account_bar.php';
 require_once __DIR__ . '/../classes/Service.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 require_once __DIR__ . '/../classes/Booking.php';
 require_once __DIR__ . '/../classes/Mailer.php';
 require_once __DIR__ . '/../classes/ImageUpload.php';
+require_once __DIR__ . '/../classes/Auth.php';
 
 // Values come from the address (first visit) or from the form (when sent).
 $input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
@@ -19,6 +21,20 @@ $start   = null;
 $error   = null;
 $errors  = [];   // problems with individual form fields
 $name = $email = $phone = $notes = $allergies = '';
+
+// A signed-in client has their details filled in, and the booking is saved under their own account email.
+$accountClient = null;
+$sessionUser   = Auth::user();
+if ($sessionUser !== null && !empty($sessionUser['client_id'])) {
+    $stmtAccount = Database::getConnection()->prepare('SELECT name, email, phone FROM Client WHERE client_id = :id');
+    $stmtAccount->execute([':id' => (int) $sessionUser['client_id']]);
+    $accountClient = $stmtAccount->fetch() ?: null;
+    if ($accountClient !== null) {
+        $name  = (string) $accountClient['name'];
+        $email = (string) $accountClient['email'];
+        $phone = (string) ($accountClient['phone'] ?? '');
+    }
+}
 
 // Did the whole form get thrown away because the photo was bigger than the server allows?
 $uploadTooBig = ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0);
@@ -76,6 +92,9 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $name  = trim(inputText($_POST, 'name', ''));
     $email = trim(inputText($_POST, 'email', ''));
     $phone = trim(inputText($_POST, 'phone', ''));
+    if ($accountClient !== null) {
+        $email = (string) $accountClient['email'];   // a signed-in client always books under their own account email
+    }
     $notes = trim(inputText($_POST, 'notes', ''));
     $allergies = trim(inputText($_POST, 'allergies', ''));
 
@@ -163,6 +182,7 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
         <h1>Executive Grooming Studio</h1>
         <p>Confirm your booking</p>
     </header>
+    <?= accountBar() ?>
 
     <main class="container">
         <p><a href="<?= e($backUrl) ?>">&larr; Back</a></p>
@@ -189,7 +209,7 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php if (isset($errors['name'])): ?><p class="field-error"><?= e($errors['name']) ?></p><?php endif; ?>
 
                 <label for="email">Email address</label>
-                <input type="email" name="email" id="email" maxlength="150" required value="<?= e($email) ?>">
+                <input type="email" name="email" id="email" maxlength="150" required value="<?= e($email) ?>"<?= $accountClient !== null ? ' readonly' : '' ?>>
                 <?php if (isset($errors['email'])): ?><p class="field-error"><?= e($errors['email']) ?></p><?php endif; ?>
 
                 <label for="phone">Phone number (optional)</label>

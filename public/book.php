@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/helpers.php';
+require_once __DIR__ . '/../config/account_bar.php';
 require_once __DIR__ . '/../classes/Service.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 require_once __DIR__ . '/../classes/Booking.php';
@@ -15,7 +16,7 @@ try {
     if ($serviceId !== false && $serviceId !== null) {
         $service = Service::find($serviceId);
     }
-    $stylists = Stylist::getAll();
+    $stylists = ($service !== null) ? Stylist::getForService((int) $service['service_id']) : [];
 } catch (PDOException $ex) {
     error_log('Could not load booking page: ' . $ex->getMessage());
     $error = 'Sorry, something went wrong on our side. Please try again later.';
@@ -108,6 +109,7 @@ if (!$error && isset($selected) && count($selected) > 0) {
         <h1>Executive Grooming Studio</h1>
         <p>Book an appointment</p>
     </header>
+    <?= accountBar() ?>
 
     <main class="container">
         <p><a href="index.php">&larr; Back to services</a></p>
@@ -158,7 +160,7 @@ if (!$error && isset($selected) && count($selected) > 0) {
                     <?php foreach ($stylists as $s): ?>
                         <option value="<?= (int) $s['stylist_id'] ?>"
                             <?= ((string) $s['stylist_id'] === $stylistChoice) ? 'selected' : '' ?>>
-                            <?= e($s['name']) ?><?= $s['specialty'] ? ' - ' . e($s['specialty']) : '' ?>
+                            <?= e($s['name']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

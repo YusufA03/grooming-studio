@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/admin_nav.php';
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/Booking.php';
+require_once __DIR__ . '/../config/booking_actions.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 require_once __DIR__ . '/../classes/Mailer.php';
 
@@ -93,7 +94,7 @@ function dashboardUrl(array $linkParams, int $page): string
     return 'admin_dashboard.php?' . http_build_query($linkParams + ['page' => $page]);
 }
 
-// ---- The Cancel button was pressed ----
+// ---- A Cancel, Completed or No-show button was pressed ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!Auth::csrfValid($_POST['csrf_token'] ?? null)) {
         $_SESSION['flash'] = ['error', 'Your session expired. Please try again.'];
@@ -104,29 +105,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash'] = ['error', 'We could not find that appointment.'];
         } else {
             try {
-                $problem = Booking::cancel($bookingId, Auth::actorLabel($user));
-                if ($problem !== '') {
-                    $_SESSION['flash'] = ['error', $problem];
+                // An administrator may act on any booking. No "action" at all is the original Cancel button.
+                $action = inputText($_POST, 'action', 'cancel');
+                if ($action === 'outcome') {
+                    [$ok, $message] = staffOutcome($bookingId, $user, inputText($_POST, 'outcome', ''), null);
+                } elseif ($action === 'cancel') {
+                    [$ok, $message] = staffCancel($bookingId, $user, null);
                 } else {
-                    // Tell the client. If the email fails the cancellation still stands.
-                    $emailed = false;
-                    $noEmail = false;
-                    try {
-                        $details = Booking::findDetails($bookingId);
-                        if ($details !== null && empty($details['client_email'])) {
-                            $noEmail = true;
-                        } elseif ($details !== null) {
-                            $emailed = Mailer::sendBookingCancellation($details);
-                        }
-                    } catch (Throwable $mailEx) {
-                        error_log('Cancellation email step failed: ' . $mailEx->getMessage());
-                    }
-                    $_SESSION['flash'] = ['success', 'The appointment was cancelled. '
-                        . ($noEmail ? 'This client has no email address, so please tell them yourself.'
-                            : ($emailed ? 'The client has been emailed.' : 'The client could NOT be emailed, so please tell them yourself.'))];
+                    [$ok, $message] = [false, 'That is not something this page can do.'];   // an unknown action does nothing
                 }
+                $_SESSION['flash'] = [$ok ? 'success' : 'error', $message];
             } catch (PDOException $ex) {
-                error_log('Could not cancel booking: ' . $ex->getMessage());
+                error_log('Could not update the appointment: ' . $ex->getMessage());
                 $_SESSION['flash'] = ['error', 'Sorry, something went wrong on our side. Please try again.'];
             }
         }
@@ -251,6 +241,7 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                             $start    = new DateTimeImmutable($b['start_time']);
                             $end      = new DateTimeImmutable($b['end_time']);
                             $canCancel = ($b['status'] === 'confirmed' && $start > $now);
+                            $canMark   = ($b['status'] === 'confirmed' && $start <= $now);   // started: Completed or No-show
                         ?>
                         <tr>
                             <td><?= e($start->format('D j M Y')) ?><br><?= e($start->format('H:i')) ?> - <?= e($end->format('H:i')) ?></td>
@@ -273,21 +264,39 @@ $last  = ($page - 1) * BOOKINGS_PER_PAGE + count($bookings);
                                             </a>
                                         <?php else: ?>-<?php endif; ?>
                             </td>
-                            <td>
-                                <a class="button" href="admin_booking.php?booking_id=<?= (int) $b['booking_id'] ?>">History</a>
-                                <?php if ($canCancel): ?>
-                                    <a class="button" href="admin_reschedule.php?booking_id=<?= (int) $b['booking_id'] ?>">Reschedule</a>
-                                    <form method="post" action="admin_dashboard.php" class="inline-form"
-                                          onsubmit="return confirm('Cancel this appointment and email the client?');">
-                                        <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
-                                        <input type="hidden" name="booking_id" value="<?= (int) $b['booking_id'] ?>">
-                                        <?php foreach ($linkParams as $name => $value): ?>
-                                            <input type="hidden" name="<?= e($name) ?>" value="<?= e((string) $value) ?>">
+                            <td class="actions-cell">
+                                <?php $completedConfirm = $canMark ? '' : " onsubmit=\"return confirm('This appointment has not started yet. Mark it as completed anyway?');\""; ?>
+                                <div class="row-actions">
+                                    <a class="button" href="admin_booking.php?booking_id=<?= (int) $b['booking_id'] ?>">History</a>
+                                    <?php if ($canCancel): ?>
+                                        <a class="button" href="admin_reschedule.php?booking_id=<?= (int) $b['booking_id'] ?>">Reschedule</a>
+                                        <form method="post" action="admin_dashboard.php"
+                                              onsubmit="return confirm('Cancel this appointment and email the client?');">
+                                            <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
+                                            <input type="hidden" name="booking_id" value="<?= (int) $b['booking_id'] ?>">
+                                            <?php foreach ($linkParams as $name => $value): ?>
+                                                <input type="hidden" name="<?= e($name) ?>" value="<?= e((string) $value) ?>">
+                                            <?php endforeach; ?>
+                                            <input type="hidden" name="page" value="<?= (int) $page ?>">
+                                            <button type="submit" class="button danger">Cancel</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($b['status'] === 'confirmed'): ?>
+                                        <?php foreach (($canMark ? ['completed' => 'Completed', 'no-show' => 'No-show'] : ['completed' => 'Completed']) as $value => $label): ?>
+                                            <form method="post" action="admin_dashboard.php"<?= $value === 'completed' ? $completedConfirm : '' ?>>
+                                                <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
+                                                <input type="hidden" name="booking_id" value="<?= (int) $b['booking_id'] ?>">
+                                                <input type="hidden" name="action" value="outcome">
+                                                <input type="hidden" name="outcome" value="<?= e($value) ?>">
+                                                <?php foreach ($linkParams as $name => $v): ?>
+                                                    <input type="hidden" name="<?= e($name) ?>" value="<?= e((string) $v) ?>">
+                                                <?php endforeach; ?>
+                                                <input type="hidden" name="page" value="<?= (int) $page ?>">
+                                                <button type="submit" class="button<?= $value === 'no-show' ? ' danger' : '' ?>"><?= e($label) ?></button>
+                                            </form>
                                         <?php endforeach; ?>
-                                        <input type="hidden" name="page" value="<?= (int) $page ?>">
-                                        <button type="submit" class="button">Cancel</button>
-                                    </form>
-                                <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

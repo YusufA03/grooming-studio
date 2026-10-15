@@ -61,6 +61,14 @@ try {
 
     if ($stylistId !== null) {
         $stylist = Stylist::findForAdmin($stylistId);
+        if ($stylist !== null) {
+            // Only the services this stylist performs can be booked in their diary.
+            $performed = Stylist::serviceIds($stylistId);
+            $services  = array_values(array_filter($services, fn ($sv) => in_array((int) $sv['service_id'], $performed, true)));
+            if ((int) $stylist['accepting_bookings'] !== 1) {
+                $notice = 'This stylist is not taking bookings at the moment.';
+            }
+        }
     }
 } catch (PDOException $ex) {
     error_log('Could not load the add-booking page: ' . $ex->getMessage());
@@ -289,7 +297,7 @@ $backLink     = $isAdmin ? ['admin_dashboard.php', 'Back to the bookings'] : ['s
                             <option value="">Choose a stylist...</option>
                             <?php foreach ($stylists as $s): ?>
                                 <option value="<?= (int) $s['stylist_id'] ?>"<?= ($stylistId === (int) $s['stylist_id']) ? ' selected' : '' ?>>
-                                    <?= e($s['name']) ?><?= $s['specialty'] ? ' - ' . e($s['specialty']) : '' ?>
+                                    <?= e($s['name']) ?><?= ((int) $s['accepting_bookings'] === 1) ? '' : ' (not taking bookings)' ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>

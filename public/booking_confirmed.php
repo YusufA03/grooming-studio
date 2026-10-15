@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/helpers.php';
+require_once __DIR__ . '/../config/account_bar.php';
 require_once __DIR__ . '/../classes/Booking.php';
 
 $booking = null;
@@ -51,6 +52,7 @@ if ($booking !== null) {
         <h1>Executive Grooming Studio</h1>
         <p>Your booking</p>
     </header>
+    <?= accountBar() ?>
 
     <main class="container">
         <?php if ($error): ?>

@@ -8,3 +8,5 @@ storage/inspiration/*
 !storage/inspiration/.htaccess
 backups/
 tools/backups/
+# added by the update
+test-results/

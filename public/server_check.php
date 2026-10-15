@@ -168,11 +168,11 @@ if (!is_file($base . '/config/db_config.php')) {
         $version = $db->query('SELECT VERSION()')->fetchColumn();
         row('OK', 'connected to the database', 'server version ' . $version);
         $tables = (int) $db->query('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()')->fetchColumn();
-        row($tables >= 7 ? 'OK' : 'FIX', "tables found: $tables", $tables >= 7 ? '' : 'the database is incomplete: the lines below say exactly what is missing and how to fix it');
-        if ($tables < 7) { $problems[] = 'the database is incomplete (see section 4)'; }
+        row($tables >= 10 ? 'OK' : 'FIX', "tables found: $tables", $tables >= 10 ? '' : 'the database is incomplete: the lines below say exactly what is missing and how to fix it');
+        if ($tables < 10) { $problems[] = 'the database is incomplete (see section 4)'; }
 
         // Linux database servers care about capital letters in table names.
-        $expectedTables = ['Administrator', 'Booking', 'BookingLog', 'Client', 'LoyaltyLedger', 'Service', 'Stylist'];
+        $expectedTables = ['AccountToken', 'Administrator', 'Booking', 'BookingLog', 'Client', 'LoyaltyLedger', 'Service', 'Stylist', 'StylistService', 'WorkingBlock'];
         $foundTables    = $db->query('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
         $badCase        = [];
         foreach ($expectedTables as $want) {
@@ -192,9 +192,9 @@ if (!is_file($base . '/config/db_config.php')) {
             }
             $problems[] = 'table names have the wrong capital letters (this breaks every page that reads data)';
         } elseif (count($missingTables) > 0) {
-            $newOnly = count(array_diff($missingTables, ['BookingLog', 'LoyaltyLedger'])) === 0;
+            $newOnly = count(array_diff($missingTables, ['BookingLog', 'LoyaltyLedger', 'AccountToken', 'StylistService', 'WorkingBlock'])) === 0;
             row('FIX', 'tables missing: ' . implode(', ', $missingTables), $newOnly
-                ? 'your database is older than the site. Import database/migration_2026_10_15.sql in phpMyAdmin (safe to run twice, deletes nothing)'
+                ? 'your database is older than the site. Import database/migration_2026_10_15.sql and migration_2026_10_16.sql in phpMyAdmin (safe to run twice, deletes nothing)'
                 : 'import schema_hosting.sql again');
             $problems[] = 'tables are missing: ' . implode(', ', $missingTables);
         } else {
@@ -213,10 +213,15 @@ if (!is_file($base . '/config/db_config.php')) {
             row($img ? 'OK' : 'FIX', 'column Service.image', $img ? '' : 'MISSING (your database came from an older schema). Run in phpMyAdmin:  ALTER TABLE Service ADD COLUMN image VARCHAR(255) NULL;');
             if (!$img) { $problems[] = 'the Service.image column is missing (the home page cannot load services)'; }
         }
+        if (in_array('Stylist', $foundTables, true)) {
+            $has = $columnInfo('Stylist', 'accepting_bookings');
+            row($has ? 'OK' : 'FIX', 'column Stylist.accepting_bookings', $has ? '' : 'MISSING: import database/migration_2026_10_16.sql in phpMyAdmin (safe to run twice, deletes nothing)');
+            if (!$has) { $problems[] = 'the Stylist.accepting_bookings column is missing (run the migration file)'; }
+        }
         if (in_array('Booking', $foundTables, true)) {
             foreach (['allergies', 'price_charged'] as $newColumn) {
                 $has = $columnInfo('Booking', $newColumn);
-                row($has ? 'OK' : 'FIX', "column Booking.$newColumn", $has ? '' : 'MISSING: import database/migration_2026_10_15.sql in phpMyAdmin (safe to run twice, deletes nothing)');
+                row($has ? 'OK' : 'FIX', "column Booking.$newColumn", $has ? '' : 'MISSING: import database/migration_2026_10_15.sql and migration_2026_10_16.sql in phpMyAdmin (safe to run twice, deletes nothing)');
                 if (!$has) { $problems[] = "the Booking.$newColumn column is missing (run the migration file)"; }
             }
         }
@@ -227,7 +232,7 @@ if (!is_file($base . '/config/db_config.php')) {
             if (!$emOk) { $problems[] = 'Client.email must be allowed to be empty'; }
         }
 
-        if ($tables >= 7 && count($badCase) === 0 && count($missingTables) === 0) {
+        if ($tables >= 10 && count($badCase) === 0 && count($missingTables) === 0) {
             echo "\n  Can people actually use the site?\n";
             $services = (int) $db->query('SELECT COUNT(*) FROM Service')->fetchColumn();
             row($services > 0 ? 'OK' : 'note', "services in the database: $services", $services > 0 ? '' : 'the public page would be empty: add services on the admin Services page, or re-import schema_hosting.sql');

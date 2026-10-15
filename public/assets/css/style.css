@@ -639,6 +639,65 @@ input[type="file"] { width: 100%; padding: 0.55rem; cursor: pointer; }
 .chart-row { display: grid; grid-template-columns: 3.5rem 1fr 2.5rem; align-items: center; gap: 0.6rem; margin: 0 0 0.35rem; font-size: 0.9rem; }
 .report-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 
+/* ---------- client accounts: account bar and My appointments ---------- */
+.account-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.9rem; padding: 0.5rem 1rem; font-size: 0.9rem; background: var(--surface); border-bottom: 0.05rem solid var(--border); }
+.account-bar a, .link-button { color: var(--accent); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.account-bar a:hover, .link-button:hover { text-decoration: underline; }
+.account-bar form { margin: 0; }
+.account-name { color: var(--muted); margin-right: auto; }
+.appt-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.points-badge { padding: 0.35rem 0.8rem; background: var(--accent-soft); border: 0.05rem solid var(--accent); border-radius: var(--radius-sm); }
+.appt-card { margin: 0 0 0.9rem; padding: 1rem 1.2rem; background: var(--surface); border: 0.05rem solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); }
+.appt-card.status-cancelled, .appt-card.status-no-show { border-left-color: var(--danger); }
+.appt-card p { margin: 0.2rem 0; }
+.appt-top, .appt-bottom { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.appt-date { letter-spacing: 0.08em; font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.appt-time { font-size: 1.2rem; font-weight: 700; }
+.appt-ref { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.05em; }
+.status-badge { padding: 0.15rem 0.6rem; border: 0.05rem solid var(--border); border-radius: var(--radius-sm); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.appt-empty { padding: 1.5rem; text-align: center; background: var(--surface); border: 0.05rem solid var(--border); border-radius: var(--radius); }
+
+/* ---------- stylists page: service ticks, warnings ---------- */
+.service-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.5rem; margin: 0.6rem 0 1rem; padding: 0; border: 0; }
+.service-checks legend { grid-column: 1 / -1; font-weight: 600; padding: 0; margin-bottom: 0.3rem; }
+.check { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.7rem; background: var(--surface); border: 0.05rem solid var(--border); border-radius: var(--radius-sm); }
+.warning { padding: 0.7rem 1rem; background: var(--danger-soft); border-left: 3px solid var(--danger); border-radius: var(--radius-sm); }
+details { margin: 0.8rem 0; }
+summary { cursor: pointer; color: var(--accent); }
+
+/* ---------- reports: cards, tables and printing on A4 ---------- */
+.report-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.report-card { display: flex; flex-direction: column; justify-content: space-between; }
+.report-table .num, .report-table th.num { text-align: right; white-space: nowrap; }
+.report-table .total-row td { font-weight: 700; border-top: 2px solid var(--border); }
+.print-only { display: none; }
+.report-letterhead { display: none; }
+@media print {
+    @page { size: A4; margin: 14mm; }
+    html, body { background: #fff !important; color: #000 !important; }
+    .site-header, .topbar, .admin-nav, .account-bar, .no-print, .filter-form, .report-tools, .theme-toggle, nav { display: none !important; }
+    .print-only, .report-letterhead { display: flex !important; flex-direction: column; gap: 2px; margin: 0 0 8mm; border-bottom: 1px solid #000; padding-bottom: 3mm; }
+    .container { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+    h2 { font-size: 16pt; margin: 0 0 4mm; color: #000; }
+    h3 { font-size: 12pt; margin: 6mm 0 2mm; color: #000; }
+    table { width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th, td { border: 1px solid #888 !important; padding: 2px 5px !important; background: #fff !important; color: #000 !important; }
+    thead { display: table-header-group; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+    .kpi { border: 1px solid #888 !important; background: #fff !important; }
+    .kpi-value { color: #000 !important; }
+    .meta, .report-footnote { color: #333 !important; font-size: 8.5pt; }
+    .warning { border: 1px solid #000; background: #fff; }
+}
+
+/* ---------- tidy action buttons in the booking tables (administrator dashboard and stylist schedule) ---------- */
+.actions-cell { min-width: 15.5rem; vertical-align: top; }
+.row-actions { display: grid; grid-template-columns: repeat(2, minmax(7rem, 1fr)); gap: 0.45rem; }
+.row-actions form { margin: 0; }
+.row-actions .button, .row-actions button.button { display: block; width: 100%; box-sizing: border-box; margin: 0; text-align: center; white-space: nowrap; }
+.button.danger, button.danger { background: var(--danger-soft); color: var(--text); border: 0.05rem solid var(--danger); }
+
 /* ---------- the light / dark switch (the button is added by assets/js/theme.js) ---------- */
 .theme-toggle {
     position: absolute;

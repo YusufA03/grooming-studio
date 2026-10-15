@@ -87,7 +87,7 @@ foreach ($strayFiles as $stray => $real) {
 }
 $removeFolders = array_values(array_filter($strayFolders, fn ($f) => is_dir($target . '/' . $f)));
 
-$gitignoreWanted = ['storage/inspiration/*', '!storage/inspiration/.htaccess', 'backups/', 'tools/backups/'];
+$gitignoreWanted = ['storage/inspiration/*', '!storage/inspiration/.htaccess', 'backups/', 'tools/backups/', 'test-results/'];
 $gitignorePath   = $target . '/.gitignore';
 $gitignoreText   = is_file($gitignorePath) ? (string) file_get_contents($gitignorePath) : '';
 $gitignoreLines  = preg_split('/\r\n|\r|\n/', $gitignoreText);

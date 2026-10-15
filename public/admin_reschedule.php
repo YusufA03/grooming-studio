@@ -11,8 +11,9 @@ require_once __DIR__ . '/../classes/Mailer.php';
 // recalculates the end time from the service length, and emails the client the new details.
 // Unlike a client, the administrator is not stopped by the 2-hour cut-off.
 
-// Only a logged-in administrator may open this page.
-$user = Auth::requireRole('admin');
+// A logged-in administrator (any booking) or stylist (their OWN bookings only) may open this page.
+$user    = Auth::requireStaff();
+$isAdmin = ($user['role'] === 'admin');
 
 $input     = ($_SERVER['REQUEST_METHOD'] === 'POST') ? $_POST : $_GET;
 $bookingId = filter_var($input['booking_id'] ?? null, FILTER_VALIDATE_INT);
@@ -32,6 +33,10 @@ if ($bookingId === false || $bookingId < 1) {
     } catch (PDOException $ex) {
         error_log('Could not load booking for rescheduling: ' . $ex->getMessage());
         $error = 'Sorry, something went wrong on our side. Please try again later.';
+    }
+    // A stylist can only ever reach their own bookings; someone else's looks exactly like "no such booking".
+    if ($booking !== null && !$isAdmin && (int) $booking['stylist_id'] !== (int) $user['id']) {
+        $booking = null;
     }
     if ($booking === null && $error === null) {
         http_response_code(404);
@@ -93,9 +98,9 @@ if ($error === null && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         . ' was moved to ' . $newStart->format('D j M') . ' at ' . $newStart->format('H:i') . '.' . $emailNote];
 
                     $day = $newStart->format('Y-m-d');
-                    header('Location: admin_dashboard.php?' . http_build_query([
-                        'from' => $day, 'to' => $day, 'stylist_id' => (int) $booking['stylist_id'], 'status' => '', 'q' => '',
-                    ]));
+                    header('Location: ' . ($isAdmin
+                        ? 'admin_dashboard.php?' . http_build_query(['from' => $day, 'to' => $day, 'stylist_id' => (int) $booking['stylist_id'], 'status' => '', 'q' => ''])
+                        : 'stylist_schedule.php?' . http_build_query(['view' => 'day', 'date' => $day])));
                     exit;
                 }
                 $formMessage = $result;
@@ -164,21 +169,21 @@ if ($booking !== null) {
 <body>
     <header class="site-header">
         <h1>Executive Grooming Studio</h1>
-        <p>Administrator Dashboard</p>
+        <p><?= $isAdmin ? 'Administrator Dashboard' : 'Stylist' ?></p>
     </header>
 
     <main class="container">
         <div class="topbar">
-            <span>Logged in as <strong><?= e($user['name']) ?></strong> (administrator)</span>
+            <span>Logged in as <strong><?= e($user['name']) ?></strong> (<?= $isAdmin ? 'administrator' : 'stylist' ?>)</span>
             <form method="post" action="logout.php">
                 <input type="hidden" name="csrf_token" value="<?= e(Auth::csrfToken()) ?>">
                 <button type="submit" class="button">Log out</button>
             </form>
         </div>
 
-        <?= adminNav('bookings') ?>
+        <?= $isAdmin ? adminNav('bookings') : '' ?>
 
-        <p><a href="admin_dashboard.php">&larr; Back to all bookings</a></p>
+        <p><?= $isAdmin ? '<a href="admin_dashboard.php">&larr; Back to all bookings</a>' : '<a href="stylist_schedule.php">&larr; Back to my schedule</a>' ?></p>
         <h2>Reschedule a booking</h2>
 
         <?php if ($error): ?>
@@ -187,7 +192,7 @@ if ($booking !== null) {
             <section class="service-card">
                 <h3>Booking #<?= (int) $booking['booking_id'] ?></h3>
                 <p><strong><?= e($booking['client_name']) ?></strong>
-                    (<?= ($booking['client_email'] !== null && $booking['client_email'] !== '') ? e($booking['client_email']) : 'no email' ?>)</p>
+                    <?php if ($isAdmin): ?>(<?= ($booking['client_email'] !== null && $booking['client_email'] !== '') ? e($booking['client_email']) : 'no email' ?>)<?php endif; ?></p>
                 <p><?= e($booking['service_name']) ?> with <?= e($booking['stylist_name']) ?> (<?= (int) $booking['duration_minutes'] ?> min)</p>
                 <p>Now: <?= e($start->format('l, j F Y')) ?>, <?= e($start->format('H:i')) ?> to <?= e($end->format('H:i')) ?></p>
             </section>

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/helpers.php';
+require_once __DIR__ . '/../config/account_bar.php';
 require_once __DIR__ . '/../classes/Service.php';
 require_once __DIR__ . '/../classes/Stylist.php';
 
@@ -20,7 +21,12 @@ $error    = null;
 
 try {
     $services = Service::getAll();
-    $stylists = Stylist::getAll();
+    $stylists   = Stylist::getAll();
+    $teamServices = Stylist::serviceNamesByStylist();
+    $teamHours    = [];
+    foreach ($stylists as $st) {
+        $teamHours[(int) $st['stylist_id']] = Stylist::describeBlocks(Stylist::blocks((int) $st['stylist_id']));
+    }
 } catch (PDOException $ex) {
     error_log('Could not load the home page: ' . $ex->getMessage());
     $error = 'Sorry, we could not load our services right now. Please try again later.';
@@ -38,9 +44,8 @@ foreach (['hero.jpg', 'hero.jpeg', 'hero.webp', 'hero.png'] as $candidate) {
 }
 
 // Stylists who are currently taking bookings.
-$working = array_filter($stylists, function ($s) {
-    $hours = Stylist::parseWorkingHours($s['working_hours']);
-    return $hours !== null && !$hours['off'];
+$working = array_filter($stylists, function ($s) use ($teamHours) {
+    return (int) $s['accepting_bookings'] === 1 && ($teamHours[(int) $s['stylist_id']] ?? '') !== 'No working hours set';
 });
 ?>
 <!DOCTYPE html>
@@ -59,6 +64,7 @@ $working = array_filter($stylists, function ($s) {
         <h1>Executive Grooming</h1>
         <p>Studio</p>
     </header>
+    <?= accountBar() ?>
 
     <main class="container">
         <section class="hero<?= $heroPhoto ? '' : ' no-photo' ?>">
@@ -141,7 +147,7 @@ $working = array_filter($stylists, function ($s) {
                             <span class="avatar" aria-hidden="true"><?= e($initials) ?></span>
                             <div>
                                 <h3><?= e($s['name']) ?></h3>
-                                <p><?= $s['specialty'] ? e($s['specialty']) . '<br>' : '' ?><?= e(Stylist::describeWorkingHours($s['working_hours'])) ?></p>
+                                <p><?= e(implode(', ', $teamServices[(int) $s['stylist_id']] ?? [])) ?><br><?= e($teamHours[(int) $s['stylist_id']] ?? '') ?></p>
                             </div>
                         </div>
                     <?php endforeach; ?>

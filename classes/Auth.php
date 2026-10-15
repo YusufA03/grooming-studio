@@ -53,9 +53,10 @@ class Auth
         session_regenerate_id(true); // a brand new session id after login
         unset($_SESSION['csrf_token']);
         $_SESSION['user'] = [
-            'id'   => (int) $account['id'],
-            'name' => $account['name'],
-            'role' => $account['role'],   // 'admin' or 'stylist'
+            'id'        => (int) $account['id'],
+            'name'      => $account['name'],
+            'role'      => $account['role'],   // 'admin', 'stylist' or 'client'
+            'client_id' => isset($account['client_id']) && $account['client_id'] !== null ? (int) $account['client_id'] : null,
         ];
         $_SESSION['last_activity'] = time();
 
@@ -91,17 +92,95 @@ class Auth
             exit;
         }
 
-        if ($user['role'] !== $role) {
-            http_response_code(403);
-            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
-               . '<title>No access</title><link rel="stylesheet" href="assets/css/style.css?v=' . (int) @filemtime(__DIR__ . '/../public/assets/css/style.css') . '"><script src="assets/js/theme.js"></script></head><body>'
-               . '<header class="site-header"><h1>Executive Grooming Studio</h1></header>'
-               . '<main class="container"><p class="error">You do not have access to this page.</p>'
-               . '<p><a href="index.php">&larr; Back to the home page</a></p></main></body></html>';
+        // An administrator whose access was taken away loses it at once, not when their session ends.
+        if ($user['role'] === 'admin' && $role === 'admin' && !self::adminStillExists((int) $user['id'])) {
+            self::logout();
+            header('Location: login.php');
             exit;
         }
 
+        if ($user['role'] !== $role) {
+            self::denyAccess();
+        }
+
         return $user;
+    }
+
+    // For pages that BOTH administrators and stylists may open (for example rescheduling and a booking's history).
+    // A stylist is further limited, by the page itself, to their own bookings.
+    public static function requireStaff(): array
+    {
+        $user = self::user();
+
+        if ($user === null) {
+            header('Location: login.php');
+            exit;
+        }
+        if ($user['role'] === 'admin') {
+            if (!self::adminStillExists((int) $user['id'])) {
+                self::logout();
+                header('Location: login.php');
+                exit;
+            }
+        } elseif ($user['role'] !== 'stylist') {
+            self::denyAccess();
+        }
+        return $user;
+    }
+
+    private static function denyAccess(): void
+    {
+        http_response_code(403);
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+           . '<title>No access</title><link rel="stylesheet" href="assets/css/style.css?v=' . (int) @filemtime(__DIR__ . '/../public/assets/css/style.css') . '"><script src="assets/js/theme.js"></script></head><body>'
+           . '<header class="site-header"><h1>Executive Grooming Studio</h1></header>'
+           . '<main class="container"><p class="error">You do not have access to this page.</p>'
+           . '<p><a href="index.php">&larr; Back to the home page</a></p></main></body></html>';
+        exit;
+    }
+
+    // Use this at the top of a page for logged-in CLIENTS (also administrators who are client accounts).
+    public static function requireClient(): array
+    {
+        $user = self::user();
+        if ($user === null || empty($user['client_id'])) {
+            header('Location: login.php');
+            exit;
+        }
+        return $user;
+    }
+
+    // Logs a client in after they have chosen their password with the emailed link.
+    public static function loginClientById(int $clientId): bool
+    {
+        self::start();
+        $stmt = Database::getConnection()->prepare(
+            'SELECT c.client_id, c.name, a.admin_id FROM Client c
+             LEFT JOIN Administrator a ON a.client_id = c.client_id
+             WHERE c.client_id = :id AND c.password_hash IS NOT NULL'
+        );
+        $stmt->execute([':id' => $clientId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return false;
+        }
+        session_regenerate_id(true);
+        unset($_SESSION['csrf_token']);
+        $_SESSION['user'] = [
+            'id'        => $row['admin_id'] !== null ? (int) $row['admin_id'] : (int) $row['client_id'],
+            'name'      => $row['name'],
+            'role'      => $row['admin_id'] !== null ? 'admin' : 'client',
+            'client_id' => (int) $row['client_id'],
+        ];
+        $_SESSION['last_activity'] = time();
+        return true;
+    }
+
+    private static function adminStillExists(int $adminId): bool
+    {
+        $stmt = Database::getConnection()->prepare('SELECT COUNT(*) FROM Administrator WHERE admin_id = :id');
+        $stmt->execute([':id' => $adminId]);
+        return (int) $stmt->fetchColumn() === 1;
     }
 
     // Logs the person out and destroys the session completely.
@@ -152,7 +231,8 @@ class Auth
     // How a staff member is named in the audit trail, for example "Administrator: Boss Admin".
     public static function actorLabel(array $user): string
     {
-        return (($user['role'] ?? '') === 'admin' ? 'Administrator' : 'Stylist') . ': ' . (string) ($user['name'] ?? '?');
+        $role = $user['role'] ?? '';
+        return ($role === 'admin' ? 'Administrator' : ($role === 'client' ? 'Client' : 'Stylist')) . ': ' . (string) ($user['name'] ?? '?');
     }
 
     private static function findAccount(string $email): ?array
@@ -160,7 +240,7 @@ class Auth
         $db = Database::getConnection();
 
         $queries = [
-            'admin'   => 'SELECT admin_id AS id, name, password_hash FROM Administrator WHERE email = :email',
+            'admin'   => 'SELECT admin_id AS id, name, password_hash FROM Administrator WHERE email = :email AND password_hash IS NOT NULL',
             'stylist' => 'SELECT stylist_id AS id, name, password_hash FROM Stylist WHERE email = :email',
         ];
 
@@ -169,9 +249,29 @@ class Auth
             $stmt->execute([':email' => $email]);
             $row = $stmt->fetch();
             if ($row !== false) {
-                $row['role'] = $role;
+                $row['role']      = $role;
+                $row['client_id'] = null;
                 return $row;
             }
+        }
+
+        // A client account. If it was given admin access from the website, it signs in as an administrator.
+        $stmt = $db->prepare(
+            'SELECT c.client_id, c.name, c.password_hash, a.admin_id
+             FROM Client c LEFT JOIN Administrator a ON a.client_id = c.client_id
+             WHERE c.email = :email AND c.password_hash IS NOT NULL
+             ORDER BY c.client_id LIMIT 1'
+        );
+        $stmt->execute([':email' => $email]);
+        $row = $stmt->fetch();
+        if ($row !== false) {
+            return [
+                'id'            => $row['admin_id'] !== null ? (int) $row['admin_id'] : (int) $row['client_id'],
+                'name'          => $row['name'],
+                'password_hash' => $row['password_hash'],
+                'role'          => $row['admin_id'] !== null ? 'admin' : 'client',
+                'client_id'     => (int) $row['client_id'],
+            ];
         }
         return null;
     }
