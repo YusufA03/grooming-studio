@@ -359,6 +359,7 @@ if ($mailpit) {
     [$r, $tokM] = book($anon, 1, 2, freshSlot(), 'Mail Mike', 'mike@example.com', ['allergies' => 'Latex gloves']); usleep(500000); $mb = mailbox(); $mm0 = $mb['messages'][0] ?? null; $body = $mm0 ? mailBody($mm0) : '';
     t('TC-E01', 'a confirmation email arrives with the service, the stylist, a link and the allergies', $mm0 !== null && str_contains($body, "Men's Haircut") && str_contains($body, 'Latex gloves') && str_contains($body, 'booking_confirmed.php?token=' . $tokM));
     @file_get_contents('http://127.0.0.1:8025/api/v1/messages', false, stream_context_create(['http' => ['method' => 'DELETE']]));
+    run('UPDATE Booking SET reminder_sent = 1');   // isolate this test: earlier tests may have left a booking that is now less than an hour away
     run('INSERT INTO Client (name,email) VALUES ("Remind Rita","rita@example.com")'); $rid = (int) db()->lastInsertId(); $soon = (new DateTimeImmutable('now'))->modify('+30 minutes');
     run("INSERT INTO Booking (client_id,stylist_id,service_id,start_time,end_time,status,price_charged,manage_token) VALUES (?,1,1,?,?,'confirmed',150,?)", [$rid, $soon->format('Y-m-d H:i:s'), $soon->modify('+30 minutes')->format('Y-m-d H:i:s'), str_repeat('b', 64)]);
     phpRun([$root . '/tools/send_reminders.php']); usleep(500000); $n1m = (int) (mailbox()['total'] ?? 0); phpRun([$root . '/tools/send_reminders.php']); usleep(500000); $n2m = (int) (mailbox()['total'] ?? 0);

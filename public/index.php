@@ -19,6 +19,9 @@ $services = [];
 $stylists = [];
 $error    = null;
 
+$teamServices = [];
+$teamHours    = [];
+
 try {
     $services = Service::getAll();
     $stylists   = Stylist::getAll();

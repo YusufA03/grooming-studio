@@ -1,5 +1,5 @@
 {
- "version": "2026-10-16 (client accounts, admin access, smart scheduling, allergy notes, loyalty points, reports, audit trail, inspiration photos, backups, staff reschedule)",
+ "version": "2026-10-26 (unit test runner, isolated reminder test, reset tool; client accounts, admin access, stylist services and blocks, five reports)",
  "optional": [
   "public/server_check.php",
   "public/email_test.php",
@@ -56,7 +56,7 @@
   "public/cancel_booking.php": "fe3cd9da370336d4012ebc554dfde655c64269a1511c4c5d45c17701a1b41359",
   "public/cron_reminders.php": "01be09c3d8cfee6990a842a03a587593b15e858c345bd88d7f83579fbda9c113",
   "public/email_test.php": "374c8232ecd5e9bd0074d1b8fda3e8140ad3c1a2daa9dcce8b336f84f5df98f9",
-  "public/index.php": "607513650c34e3f37746e176daa71351c7650f20e77a58d3e1df1f07f1e1a0f0",
+  "public/index.php": "6b498bfe8440960bf25e21fdfeef147e6950f7207982f4d1101396c5b4700510",
   "public/inspiration_image.php": "eaeda065e049bd3d3697b07a254f0bc21c3c5a05e8a5b5b77484270695f09f06",
   "public/login.php": "e4e7b2e2e1918d35bc260c417d056b38e7b3919500c6763bf74d9afe3223477d",
   "public/logout.php": "efad2c0b83e037f8721fd4d1cb955fa03f8a89084c8b9ea8d97342611ac46b2a",
@@ -71,9 +71,11 @@
   "storage/inspiration/.htaccess": "9678cd80ac49ea85e61a143912d00ece47962fc6c3ecce52522b09cd2b0fef37",
   "tools/apply_theme.php": "2c68c0764470a9dc56affb3f0c930b9729334d5eaff8398b9b3373e96b4ff5c6",
   "tools/backup_db.php": "9cd65d3756ad30d349b0c75078069b9204e35f47a66223b04fea1b64f9bf21ec",
-  "tools/check_install.php": "e9acd6c65628c281bd9421a1211c0c5cf7891162a5149fb0a188071c42e45c24",
+  "tools/check_install.php": "88fb28372dc81f43056efc2ecc840d3cf1463517cda04852c63f2035c8f832d0",
   "tools/cleanup_images.php": "871b7e193b5106ddab57c431465d8a8646a8e3cf8f9e1c54a26438f47beb6de6",
-  "tools/run_tests.php": "a89ec3424ff129aeea6219c3f0521d29eeb8931023db75c9a7d43431a576170d",
+  "tools/reset_test_data.php": "aed3bbc1789c10c2ed047ebd5c302587dcb97da0822dc361227a8a6e8a3a5c06",
+  "tools/run_tests.php": "43d77bf32220943e4499887ea98ead55ccc139ef2526e1015ebe1c965259f8c3",
+  "tools/run_unit_tests.php": "879bb0198948fcac2dda103c6294b53791626076236577cc19e8a8e73c90044c",
   "tools/send_reminders.php": "98ee5b95154d53e1e18fd2334cbc9ab77e04c69b1a0c7373449a0c6dcf4f8635",
   "tools/set_password.php": "0cdb20b69ca466c2782c7185977dff7222723e6ed2213a9645d4c889be5a6487",
   "tools/verify_files.php": "592a036dc6fbf5b449f3d2aa8ce04726baba518ccd9bd81873b0dcfac9a2fc08"

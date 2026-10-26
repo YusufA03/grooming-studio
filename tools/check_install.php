@@ -80,6 +80,7 @@ $files = [
     'tools/run_tests.php'             => 'AUTOMATED TEST RUNNER',
     'classes/AuditLog.php'            => 'The audit trail',
     'classes/Account.php'             => 'OPTIONAL client accounts',
+    'tools/reset_test_data.php'       => 'RESET TEST DATA',
     'config/booking_actions.php'      => 'What staff do to a booking',
     'config/report_helpers.php'       => 'Shared pieces of the five management reports',
     'public/admin_report_register.php'      => 'REPORT 1: Bookings register',
