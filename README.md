@@ -53,7 +53,7 @@ Clients book online in under a minute, without needing an account, and the syste
 - **Stylists:** tick the services each stylist performs, set working hours as **blocks** (a lunch break is simply two blocks), and press **Stop taking bookings** or **Start taking bookings**. If a change would leave upcoming bookings outside the new hours or services, a warning lists them. Bookings are never changed automatically.
 - **Admins:** give or take away administrator access from the website. Removal takes effect immediately.
 - **Loyalty:** balances and a ledger for each client, with rewards and corrections recorded. 1 point for every R10 of a completed appointment, and 100 points can be exchanged in the salon for R50 off.
-- **Reports** (each prints on A4 and downloads as CSV): Bookings register, Takings, Stylist activity, Cancellations and no-shows, Customer history, and a busy-periods overview. **Allergy notes never appear in any report or download.**
+- **Reports** (each prints on A4 and downloads as a **PDF** or a CSV): Bookings register, Takings, Stylist activity, Cancellations and no-shows, Customer history, and a busy-periods overview. **Allergy notes never appear in any report or download.**
 - **Booking history:** an audit trail of who booked, moved, cancelled or marked each booking, and when.
 
 ### Everywhere
@@ -69,10 +69,11 @@ Clients book online in under a minute, without needing an account, and the syste
 | Database | MySQL / MariaDB through PDO and prepared statements (10 tables) |
 | Email | PHPMailer over SMTP (Gmail in production, Mailpit for local testing) |
 | Front end | Server-rendered HTML, one stylesheet, one small script (the theme switch) |
+| Reports | Print on A4, or download as PDF or CSV. The PDF is made by a small writer in plain PHP (`config/report_pdf.php`), so nothing extra is installed |
 | Hosting | Alwaysdata free plan, with scheduled tasks for reminders, backups and photo clean-up |
 | Local development | XAMPP on Windows |
 
-**Size:** 64 application PHP files and about 10,100 lines of PHP, plus about 790 lines of CSS and JavaScript. There are 14 classes, 31 pages (28 on the live site; three are temporary deployment helpers), 9 command-line tools and 2 test runners.
+**Size:** 65 application PHP files and about 10,500 lines of PHP, plus about 790 lines of CSS and JavaScript. There are 14 classes, 31 pages (28 on the live site; three are temporary deployment helpers), 9 command-line tools and 2 test runners.
 
 ### Structure
 
@@ -80,7 +81,7 @@ Clients book online in under a minute, without needing an account, and the syste
 grooming-studio/
 ├── classes/      Business logic: Account, AdminAccess, AuditLog, Auth, Booking, Client, Database,
 │                 ImageUpload, Loyalty, Mailer, Reminder, Report, Service, Stylist
-├── config/       Shared helpers and page parts, time zone, *.example.php settings templates
+├── config/       Shared helpers and page parts, the report PDF writer, time zone, *.example.php settings templates
 ├── public/       The only folder the web server exposes: pages, CSS, JavaScript
 ├── storage/      Clients' private photos (closed to the web)
 ├── tools/        Command-line tools and the two test runners (see below)
@@ -179,12 +180,12 @@ The project has two automated runners. Each builds its **own temporary database*
 
 | Runner | Command | Result |
 |--------|---------|--------|
-| System tests | `php tools\run_tests.php` (start Mailpit first) | 112 checks covering 109 of the 114 test cases. All pass |
-| Unit tests | `php tools\run_unit_tests.php` | 143 tests of the classes. All pass |
+| System tests | `php tools\run_tests.php` (start Mailpit first) | 115 checks covering 112 of the 117 test cases. All pass |
+| Unit tests | `php tools\run_unit_tests.php` | 158 tests of the classes and the PDF writer. All pass |
 
-- The system runner starts its own web server and tests whole workflows across all roles, including six clients booking the same time at the same instant (exactly one booking is saved). It saves a report to `test-results\results-DATE.html` and `.csv`.
+- The system runner starts its own web server and tests whole workflows across all roles, including six clients booking the same time at the same instant (exactly one booking is saved), and it downloads every report as a PDF and checks it against the CSV. It saves a report to `test-results\results-DATE.html` and `.csv`, and sample PDFs of every report to `test-results\report-pdfs\`.
 - The unit runner calls the classes directly, with normal, boundary and invalid values.
-- **The tests were tested:** ten bugs were planted in a copy of the code, one at a time, and every one was caught.
+- **The tests were tested:** fifteen bugs were planted in a copy of the code, one at a time (ten in the booking, loyalty, security and report logic, and five in the PDF writer), and every one was caught.
 - Five test cases need a person (TC-B11, TC-E04, TC-O04, TC-N01 and TC-N04), as do the checks on the live site, the browser matrix and the usability test.
 - 23 defects were found during development and testing. All are fixed.
 
