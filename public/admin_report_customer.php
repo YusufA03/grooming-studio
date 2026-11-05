@@ -24,16 +24,17 @@ try {
     $loadError = 'Sorry, something went wrong on our side. Please try again later.';
 }
 
-if ($history !== null && inputText($_GET, 'export', '') === 'csv') {
+$export = inputText($_GET, 'export', '');
+if ($history !== null && in_array($export, ['csv', 'pdf'], true)) {
     $c = $history['client']; $t = $history['totals'];
     $out = [['Customer history'], ['Client', $c['name']], ['Email', (string) ($c['email'] ?? '')], [],
             ['Appointments', $t['bookings']], ['Completed', $t['completed']], ['Total spent (R)', number_format((float) $t['spent'], 2, '.', '')], ['No-shows', $t['no_show']], ['Cancelled', $t['cancelled']],
-            ['Upcoming', $t['upcoming']], ['Loyalty balance (points)', $history['balance']], [], ['VISITS (latest 50)'],
+            ['Upcoming', $t['upcoming']], ['Loyalty balance (points)', $history['balance']], [], ['VISITS (latest 50)'], '@table',
             ['Reference', 'Date', 'Start', 'Service', 'Stylist', 'Status', 'Price (R)']];
     foreach ($history['visits'] as $v) { $out[] = [bookingReference((int) $v['booking_id']), substr($v['start_time'], 0, 10), substr($v['start_time'], 11, 5), $v['service_name'], $v['stylist_name'], $v['status'], number_format((float) $v['price_charged'], 2, '.', '')]; }
-    $out[] = []; $out[] = ['LOYALTY POINTS']; $out[] = ['When', 'Points', 'Type', 'Note'];
+    $out[] = []; $out[] = ['LOYALTY POINTS']; $out[] = '@table'; $out[] = ['When', 'Points', 'Type', 'Note'];
     foreach ($history['ledger'] as $l) { $out[] = [substr($l['created_at'], 0, 16), $l['points'], $l['reason'], $l['note'] ?? '']; }
-    sendCsv('customer-history-' . (int) $c['client_id'] . '.csv', $out);
+    sendReport($export, 'customer-history-' . (int) $c['client_id'], $out, $user);
 }
 
 reportOpen($user, 'Customer history', $history !== null ? $history['client']['name'] : '');
@@ -66,6 +67,7 @@ reportOpen($user, 'Customer history', $history !== null ? $history['client']['na
             <?php $c = $history['client']; $t = $history['totals']; ?>
             <p class="report-tools no-print">
                 <button type="button" class="button" onclick="window.print()">Print (A4)</button>
+                <a class="button" href="?<?= e(http_build_query(['client_id' => (int) $c['client_id'], 'export' => 'pdf'])) ?>">Download PDF</a>
                 <a class="button" href="?<?= e(http_build_query(['client_id' => (int) $c['client_id'], 'export' => 'csv'])) ?>">Download CSV</a>
                 <a class="button" href="admin_report_customer.php">Another client</a>
             </p>

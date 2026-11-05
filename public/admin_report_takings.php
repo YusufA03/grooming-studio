@@ -20,15 +20,16 @@ try {
 $total = 0.0; $count = 0;
 foreach ($byDay as $d) { $total += (float) $d['value']; $count += (int) $d['appointments']; }
 
-if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
-    $out = [['Takings'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], [], ['DAY BY DAY'], ['Date', 'Completed appointments', 'Value (R)']];
+$export = inputText($_GET, 'export', '');
+if ($loadError === null && in_array($export, ['csv', 'pdf'], true)) {
+    $out = [['Takings'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], [], ['DAY BY DAY'], '@table', ['Date', 'Completed appointments', 'Value (R)']];
     foreach ($byDay as $d) { $out[] = [$d['day'], $d['appointments'], number_format((float) $d['value'], 2, '.', '')]; }
     $out[] = ['Total', $count, number_format($total, 2, '.', '')];
-    $out[] = []; $out[] = ['SERVICE BY SERVICE']; $out[] = ['Service', 'Completed appointments', 'Value (R)'];
+    $out[] = []; $out[] = ['SERVICE BY SERVICE']; $out[] = '@table'; $out[] = ['Service', 'Completed appointments', 'Value (R)'];
     foreach ($byService as $s) { $out[] = [$s['name'], $s['appointments'], number_format((float) $s['value'], 2, '.', '')]; }
     $out[] = ['Total', $count, number_format($total, 2, '.', '')];
     $out[] = []; $out[] = ['Loyalty rewards given (R)', $rewards['value']]; $out[] = ['Takings less rewards (R)', number_format($total - $rewards['value'], 2, '.', '')];
-    sendCsv('takings-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d') . '.csv', $out);
+    sendReport($export, 'takings-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d'), $out, $user);
 }
 
 reportOpen($user, 'Takings', $from->format('j M Y') . ' to ' . $to->format('j M Y'));

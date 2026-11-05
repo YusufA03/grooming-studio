@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/admin_nav.php';
+require_once __DIR__ . '/report_pdf.php';
 require_once __DIR__ . '/../classes/Auth.php';
 
 // Shared pieces of the five management reports: choosing a period, the page layout, printing on A4 and the CSV download.
@@ -71,10 +72,21 @@ function sendCsv(string $filename, array $rows): void
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");   // lets Excel read it as UTF-8
     foreach ($rows as $row) {
+        if (!is_array($row)) { continue; }      // hints for the PDF (such as '@table') are not part of the spreadsheet
         fputcsv($out, array_map('csvCell', $row));
     }
     fclose($out);
     exit;
+}
+
+// Sends the report as the download the administrator asked for: ?export=csv (a spreadsheet) or ?export=pdf (a document).
+// Both are made from the same rows, so the two downloads always show the same figures. $base is the file name without its ending.
+function sendReport(string $format, string $base, array $rows, array $user, ?array $pdfRows = null): void
+{
+    if ($format === 'pdf') {
+        sendPdf($base . '.pdf', $pdfRows ?? $rows, (string) ($user['name'] ?? 'administrator'));
+    }
+    sendCsv($base . '.csv', $rows);
 }
 
 // The top of a report page: the head, the salon header, the administrator bar and menu, and the title. Also a block that only appears
@@ -152,6 +164,7 @@ function reportToolbar(DateTimeImmutable $from, DateTimeImmutable $to, ?string $
                 <a class="button" href="?<?= e(http_build_query($p + $extra)) ?>"><?= e($label) ?></a>
             <?php endforeach; ?>
             <button type="button" class="button" onclick="window.print()">Print (A4)</button>
+            <a class="button" href="?<?= e(http_build_query($range + $extra + ['export' => 'pdf'])) ?>">Download PDF</a>
             <a class="button" href="?<?= e(http_build_query($range + $extra + ['export' => 'csv'])) ?>">Download CSV</a>
         </p>
         <?php if ($problem): ?><p class="error"><?= e($problem) ?> Showing the last 30 days instead.</p><?php endif; ?>

@@ -33,9 +33,10 @@ foreach ($rows as $r) {
 $stylistName = 'All stylists';
 foreach ($stylists as $s) { if ($stylistId === (int) $s['stylist_id']) { $stylistName = $s['name']; } }
 
-if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
+$export = inputText($_GET, 'export', '');
+if ($loadError === null && in_array($export, ['csv', 'pdf'], true)) {
     $out = [
-        ['Bookings register'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], ['Stylist', $stylistName], ['Status', $status ?? 'all'], ['Search', $search], [],
+        ['Bookings register'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], ['Stylist', $stylistName], ['Status', $status ?? 'all'], ['Search', $search], [], '@table',
         ['Reference', 'Date', 'Start', 'End', 'Client', 'Service', 'Stylist', 'Status', 'Price (R)'],
     ];
     foreach ($rows as $r) {
@@ -47,7 +48,7 @@ if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
     $out[] = ['Completed', $counts['completed'], 'Value of completed (R)', number_format($value, 2, '.', '')];
     $out[] = ['Upcoming', $counts['confirmed']]; $out[] = ['No-shows', $counts['no-show']]; $out[] = ['Cancelled', $counts['cancelled']];
     if ($truncated) { $out[] = ['Only the first 2000 appointments are shown. Choose a shorter period.']; }
-    sendCsv('bookings-register-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d') . '.csv', $out);
+    sendReport($export, 'bookings-register-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d'), $out, $user);
 }
 
 reportOpen($user, 'Bookings register', $from->format('j M Y') . ' to ' . $to->format('j M Y'));

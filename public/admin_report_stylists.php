@@ -17,14 +17,15 @@ try {
 $hours = static fn ($minutes): string => number_format(((int) $minutes) / 60, 1);
 $pct   = static fn (?float $r): string => $r === null ? 'n/a' : number_format($r * 100, 1) . '%';
 
-if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
-    $out = [['Stylist activity'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], [],
+$export = inputText($_GET, 'export', '');
+if ($loadError === null && in_array($export, ['csv', 'pdf'], true)) {
+    $out = [['Stylist activity'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], [], '@table',
             ['Stylist', 'Hours rostered', 'Hours booked', 'Utilisation', 'Completed', 'No-shows', 'Cancelled', 'Hours lost to cancellation', 'Upcoming', 'Value of completed (R)']];
     foreach ($rows as $r) {
         $out[] = [$r['name'], $hours($r['rostered_minutes']), $hours($r['booked_minutes']), $r['utilisation'] === null ? '' : round($r['utilisation'] * 100, 1) . '%',
                   $r['completed'], $r['no_show'], $r['cancelled'], $hours($r['cancelled_minutes']), $r['upcoming'], number_format((float) $r['value'], 2, '.', '')];
     }
-    sendCsv('stylist-activity-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d') . '.csv', $out);
+    sendReport($export, 'stylist-activity-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d'), $out, $user);
 }
 
 reportOpen($user, 'Stylist activity', $from->format('j M Y') . ' to ' . $to->format('j M Y'));

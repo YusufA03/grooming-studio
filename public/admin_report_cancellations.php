@@ -29,8 +29,9 @@ foreach ($noShows as $r) {
 }
 uasort($perClient, fn ($a, $b) => [$b['n'], $a['name']] <=> [$a['n'], $b['name']]);
 
-if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
-    $out = [['Cancellations and no-shows'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], [], ['CANCELLATIONS'],
+$export = inputText($_GET, 'export', '');
+if ($loadError === null && in_array($export, ['csv', 'pdf'], true)) {
+    $out = [['Cancellations and no-shows'], ['Period', $from->format('Y-m-d'), $to->format('Y-m-d')], [], ['CANCELLATIONS'], '@table',
             ['Reference', 'Appointment', 'Client', 'Service', 'Stylist', 'Price (R)', 'Cancelled at', 'Cancelled by', 'Notice (minutes)']];
     foreach ($cancels as $r) {
         $out[] = [bookingReference((int) $r['booking_id']), substr($r['start_time'], 0, 16), $r['client_name'], $r['service_name'], $r['stylist_name'],
@@ -38,12 +39,12 @@ if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
                   $r['notice_minutes'] === null ? '' : $r['notice_minutes']];
     }
     $out[] = ['Cancelled', count($cancels), 'Value (R)', number_format($cancelValue, 2, '.', '')];
-    $out[] = []; $out[] = ['NO-SHOWS']; $out[] = ['Reference', 'Appointment', 'Client', 'Service', 'Stylist', 'Price (R)'];
+    $out[] = []; $out[] = ['NO-SHOWS']; $out[] = '@table'; $out[] = ['Reference', 'Appointment', 'Client', 'Service', 'Stylist', 'Price (R)'];
     foreach ($noShows as $r) { $out[] = [bookingReference((int) $r['booking_id']), substr($r['start_time'], 0, 16), $r['client_name'], $r['service_name'], $r['stylist_name'], number_format((float) $r['price_charged'], 2, '.', '')]; }
     $out[] = ['No-shows', count($noShows), 'Value (R)', number_format($noShowValue, 2, '.', '')];
-    $out[] = []; $out[] = ['CLIENTS WHO DID NOT ARRIVE']; $out[] = ['Client', 'No-shows', 'Value (R)'];
+    $out[] = []; $out[] = ['CLIENTS WHO DID NOT ARRIVE']; $out[] = '@table'; $out[] = ['Client', 'No-shows', 'Value (R)'];
     foreach ($perClient as $c) { $out[] = [$c['name'], $c['n'], number_format($c['value'], 2, '.', '')]; }
-    sendCsv('cancellations-and-no-shows-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d') . '.csv', $out);
+    sendReport($export, 'cancellations-and-no-shows-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d'), $out, $user);
 }
 
 reportOpen($user, 'Cancellations and no-shows', $from->format('j M Y') . ' to ' . $to->format('j M Y'));

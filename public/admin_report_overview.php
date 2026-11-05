@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/admin_nav.php';
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/Report.php';
+require_once __DIR__ . '/../config/report_helpers.php';
 
 // The administrator's reports: busy periods, popular services and stylist performance
 // (Phase 1 Section 11, Phase 3 Section 3.5). Each figure counts the bookings that START in the
@@ -51,53 +52,41 @@ try {
     $loadError = 'Sorry, something went wrong on our side. Please try again later.';
 }
 
-// ---- Download the figures as a spreadsheet (CSV) ----
-if ($loadError === null && inputText($_GET, 'export', '') === 'csv') {
-    // A cell that starts with = + - or @ could be run as a formula by a spreadsheet, so it is defused.
-    $cell = static function ($value): string {
-        $text = (string) $value;
-        return ($text !== '' && strpbrk($text[0], "=+-@\t\r") !== false) ? "'" . $text : $text;
-    };
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="grooming-studio-report-' . $from->format('Y-m-d') . '-to-' . $to->format('Y-m-d') . '.csv"');
-    header('X-Content-Type-Options: nosniff');
-    $out = fopen('php://output', 'w');
-    fwrite($out, "\xEF\xBB\xBF");   // lets Excel read it as UTF-8
-    fputcsv($out, ['Executive Grooming Studio report', $from->format('Y-m-d'), $to->format('Y-m-d')]);
-    fputcsv($out, []);
-    fputcsv($out, ['SUMMARY']);
-    foreach ([
+// ---- Download the figures: a spreadsheet (CSV) or a document (PDF), both made from the same figures ----
+$export = inputText($_GET, 'export', '');
+if ($loadError === null && in_array($export, ['csv', 'pdf'], true)) {
+    $stats = [
         'Bookings' => $summary['total'], 'Upcoming (confirmed)' => $summary['confirmed'], 'Completed' => $summary['completed'],
         'No-shows' => $summary['no_show'], 'Cancelled' => $summary['cancelled'],
         'Revenue from completed (R)' => number_format($summary['revenue'], 2, '.', ''),
         'No-show rate' => $summary['no_show_rate'] === null ? '' : round($summary['no_show_rate'] * 100, 1) . '%',
         'Cancellation rate' => $summary['cancellation_rate'] === null ? '' : round($summary['cancellation_rate'] * 100, 1) . '%',
-    ] as $label => $value) {
-        fputcsv($out, [$label, $value]);
-    }
-    fputcsv($out, []);
-    fputcsv($out, ['BUSY DAYS (bookings that were not cancelled)']);
-    foreach (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as $i => $dayName) {
-        fputcsv($out, [$dayName, $weekdays[$i]]);
-    }
-    fputcsv($out, []);
-    fputcsv($out, ['BUSY HOURS (start hour, bookings)']);
-    foreach ($hours as $h => $n) {
-        fputcsv($out, [sprintf('%02d:00', $h), $n]);
-    }
-    fputcsv($out, []);
-    fputcsv($out, ['SERVICES', 'Bookings', 'Completed', 'Revenue (R)']);
+    ];
+    $dayNamesFull = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    $period = [$from->format('Y-m-d'), $to->format('Y-m-d')];
+    $out = [['Executive Grooming Studio report', $period[0], $period[1]], [], ['SUMMARY']];
+    $doc = [['Overview: busy periods, popular services and stylists', $period[0], $period[1]], [], '@h', ['Summary']];
+    foreach ($stats as $label => $value) { $out[] = [$label, $value]; $doc[] = [$label, $value]; }
+    $out[] = []; $out[] = ['BUSY DAYS (bookings that were not cancelled)'];
+    $doc[] = []; $doc[] = ['Busy days (bookings that were not cancelled)']; $doc[] = '@table'; $doc[] = ['Day', 'Bookings'];
+    foreach ($dayNamesFull as $i => $dayName) { $out[] = [$dayName, $weekdays[$i]]; $doc[] = [$dayName, $weekdays[$i]]; }
+    $out[] = []; $out[] = ['BUSY HOURS (start hour, bookings)'];
+    $doc[] = []; $doc[] = ['Busy hours (by start hour)']; $doc[] = '@table'; $doc[] = ['Start hour', 'Bookings'];
+    foreach ($hours as $h => $n) { $out[] = [sprintf('%02d:00', $h), $n]; $doc[] = [sprintf('%02d:00', $h), $n]; }
+    $out[] = []; $out[] = ['SERVICES', 'Bookings', 'Completed', 'Revenue (R)'];
+    $doc[] = []; $doc[] = ['Popular services']; $doc[] = '@table'; $doc[] = ['Service', 'Bookings', 'Completed', 'Revenue (R)'];
     foreach ($services as $s) {
-        fputcsv($out, [$cell($s['name']), $s['bookings'], $s['completed'], number_format((float) $s['revenue'], 2, '.', '')]);
+        $row = [$s['name'], $s['bookings'], $s['completed'], number_format((float) $s['revenue'], 2, '.', '')];
+        $out[] = $row; $doc[] = $row;
     }
-    fputcsv($out, []);
-    fputcsv($out, ['STYLISTS', 'Completed', 'No-shows', 'Cancelled', 'Upcoming', 'Hours booked', 'Revenue (R)']);
+    $out[] = []; $out[] = ['STYLISTS', 'Completed', 'No-shows', 'Cancelled', 'Upcoming', 'Hours booked', 'Revenue (R)'];
+    $doc[] = []; $doc[] = ['Stylists']; $doc[] = '@table'; $doc[] = ['Stylist', 'Completed', 'No-shows', 'Cancelled', 'Upcoming', 'Hours booked', 'Revenue (R)'];
     foreach ($stylists as $s) {
-        fputcsv($out, [$cell($s['name']), $s['completed'], $s['no_show'], $s['cancelled'], $s['confirmed'],
-            round(((int) $s['booked_minutes']) / 60, 1), number_format((float) $s['revenue'], 2, '.', '')]);
+        $row = [$s['name'], $s['completed'], $s['no_show'], $s['cancelled'], $s['confirmed'],
+            round(((int) $s['booked_minutes']) / 60, 1), number_format((float) $s['revenue'], 2, '.', '')];
+        $out[] = $row; $doc[] = $row;
     }
-    fclose($out);
-    exit;
+    sendReport($export, 'grooming-studio-report-' . $period[0] . '-to-' . $period[1], $out, $user, $doc);
 }
 
 $range = ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')];
@@ -154,6 +143,7 @@ $maxSvc   = $services ? max(1, max(array_map(static fn ($s) => (int) $s['booking
             <?php foreach ($presets as $label => $p): ?>
                 <a class="button" href="admin_report_overview.php?<?= e(http_build_query($p)) ?>"><?= e($label) ?></a>
             <?php endforeach; ?>
+            <a class="button" href="admin_report_overview.php?<?= e(http_build_query($range + ['export' => 'pdf'])) ?>">Download PDF</a>
             <a class="button" href="admin_report_overview.php?<?= e(http_build_query($range + ['export' => 'csv'])) ?>">Download as spreadsheet (CSV)</a>
         </p>
 
